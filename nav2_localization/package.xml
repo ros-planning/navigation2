@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>nav2_localization</name>
+  <version>0.0.1</version>
+  <description>A localization framework</description>
+  <maintainer email="josemigueltorrescamara@gmail.com">Jose Miguel TORRES CAMARA</maintainer>
+  <maintainer email="khaledsoultan63@gmail.com">Khaled SAAD</maintainer>
+  <maintainer email="stevenmacenski@gmail.com">Steve MACENSKI</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>nav2_util</depend>
+  <depend>nav_2d_utils</depend>
+  <depend>message_filters</depend>
+  <depend>sensor_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>rclcpp_lifecycle</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <nav2_localization plugin="${prefix}/plugins.xml" />
+  </export>
+</package>
