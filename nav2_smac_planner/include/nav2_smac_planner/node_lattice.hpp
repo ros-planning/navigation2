@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License. Reserved.
 
-#ifndef NAV2_SMAC_PLANNER__NODE_SE2_HPP_
-#define NAV2_SMAC_PLANNER__NODE_SE2_HPP_
+#ifndef NAV2_SMAC_PLANNER__NODE_LATTICE_HPP_
+#define NAV2_SMAC_PLANNER__NODE_LATTICE_HPP_
 
 #include <math.h>
 #include <vector>
@@ -24,167 +24,108 @@
 #include <memory>
 #include <utility>
 #include <limits>
+#include <string>
 
 #include "ompl/base/StateSpace.h"
 
 #include "nav2_smac_planner/constants.hpp"
 #include "nav2_smac_planner/types.hpp"
 #include "nav2_smac_planner/collision_checker.hpp"
+#include "nav2_smac_planner/node_hybrid.hpp"
 
 namespace nav2_smac_planner
 {
 
-// Need seperate pose struct for motion table operations
+// forward declare
+class NodeLattice;
+class NodeHybrid;
+
+typedef std::pair<unsigned int, double> LatticeMetadata;
 
 /**
- * @struct nav2_smac_planner::MotionPose
- * @brief A struct for poses in motion primitives
- */
-struct MotionPose
-{
-  /**
-   * @brief A constructor for nav2_smac_planner::MotionPose
-   */
-  MotionPose() {}
-
-  /**
-   * @brief A constructor for nav2_smac_planner::MotionPose
-   * @param x X pose
-   * @param y Y pose
-   * @param theta Angle of pose
-   */
-  MotionPose(const float & x, const float & y, const float & theta)
-  : _x(x), _y(y), _theta(theta)
-  {}
-
-  float _x;
-  float _y;
-  float _theta;
-};
-
-typedef std::vector<MotionPose> MotionPoses;
-
-// Must forward declare
-class NodeSE2;
-
-/**
- * @struct nav2_smac_planner::MotionTable
+ * @struct nav2_smac_planner::LatticeMotionTable
  * @brief A table of motion primitives and related functions
  */
-struct MotionTable
+struct LatticeMotionTable
 {
   /**
-   * @brief A constructor for nav2_smac_planner::MotionTable
+   * @brief A constructor for nav2_smac_planner::LatticeMotionTable
    */
-  MotionTable() {}
+  LatticeMotionTable() {}
 
   /**
-   * @brief Initializing using Dubin model
+   * @brief Initializing state lattice planner's motion model
    * @param size_x_in Size of costmap in X
    * @param size_y_in Size of costmap in Y
    * @param angle_quantization_in Size of costmap in bin sizes
    * @param search_info Parameters for searching
    */
-  void initDubin(
+  void initMotionModel(
     unsigned int & size_x_in,
-    unsigned int & size_y_in,
-    unsigned int & angle_quantization_in,
-    SearchInfo & search_info);
-
-  /**
-   * @brief Initializing using Reeds-Shepp model
-   * @param size_x_in Size of costmap in X
-   * @param size_y_in Size of costmap in Y
-   * @param angle_quantization_in Size of costmap in bin sizes
-   * @param search_info Parameters for searching
-   */
-  void initReedsShepp(
-    unsigned int & size_x_in,
-    unsigned int & size_y_in,
-    unsigned int & angle_quantization_in,
     SearchInfo & search_info);
 
   /**
    * @brief Get projections of motion models
-   * @param node Ptr to SE2 node
+   * @param node Ptr to NodeLattice
    * @return A set of motion poses
    */
-  MotionPoses getProjections(const NodeSE2 * node);
+  MotionPoses getProjections(const NodeLattice * node);
 
   /**
-   * @brief Get a projection of motion model
-   * @param node Ptr to SE2 node
-   * @return A motion pose
+   * @brief Get file metadata needed
+   * @param lattice_filepath Filepath to the lattice file
+   * @return A set of metadata containing the number of angular bins
+   * and the global coordinates minimum turning radius of the primitives
+   * for use in analytic expansion and heuristic calculation.
    */
-  MotionPose getProjection(const NodeSE2 * node, const unsigned int & motion_index);
+  static LatticeMetadata getLatticeMetadata(const std::string & lattice_filepath);
 
   MotionPoses projections;
   unsigned int size_x;
   unsigned int num_angle_quantization;
   float num_angle_quantization_float;
+  float min_turning_radius;
   float bin_size;
   float change_penalty;
   float non_straight_penalty;
   float cost_penalty;
   float reverse_penalty;
+  float obstacle_heuristic_cost_weight;
   ompl::base::StateSpacePtr state_space;
-  std::vector<std::vector<double>> delta_xs;
-  std::vector<std::vector<double>> delta_ys;
+  std::vector<TrigValues> trig_values;
+  std::string current_lattice_filepath;
 };
 
 /**
- * @class nav2_smac_planner::NodeSE2
- * @brief NodeSE2 implementation for graph
+ * @class nav2_smac_planner::NodeLattice
+ * @brief NodeLattice implementation for graph, Hybrid-A*
  */
-class NodeSE2
+class NodeLattice
 {
 public:
-  typedef NodeSE2 * NodePtr;
-  typedef std::unique_ptr<std::vector<NodeSE2>> Graph;
+  typedef NodeLattice * NodePtr;
+  typedef std::unique_ptr<std::vector<NodeLattice>> Graph;
   typedef std::vector<NodePtr> NodeVector;
-  /**
-   * @class nav2_smac_planner::NodeSE2::Coordinates
-   * @brief NodeSE2 implementation of coordinate structure
-   */
-  struct Coordinates
-  {
-    /**
-     * @brief A constructor for nav2_smac_planner::NodeSE2::Coordinates
-     */
-    Coordinates() {}
-
-    /**
-     * @brief A constructor for nav2_smac_planner::NodeSE2::Coordinates
-     * @param x_in X coordinate
-     * @param y_in Y coordinate
-     * @param theta_in Theta coordinate
-     */
-    Coordinates(const float & x_in, const float & y_in, const float & theta_in)
-    : x(x_in), y(y_in), theta(theta_in)
-    {}
-
-    float x, y, theta;
-  };
-
-  typedef std::vector<Coordinates> CoordinateVector;
+  typedef NodeHybrid::Coordinates Coordinates;
+  typedef NodeHybrid::CoordinateVector CoordinateVector;
 
   /**
-   * @brief A constructor for nav2_smac_planner::NodeSE2
+   * @brief A constructor for nav2_smac_planner::NodeLattice
    * @param index The index of this node for self-reference
    */
-  explicit NodeSE2(const unsigned int index);
+  explicit NodeLattice(const unsigned int index);
 
   /**
-   * @brief A destructor for nav2_smac_planner::NodeSE2
+   * @brief A destructor for nav2_smac_planner::NodeLattice
    */
-  ~NodeSE2();
+  ~NodeLattice();
 
   /**
    * @brief operator== for comparisons
-   * @param NodeSE2 right hand side node reference
+   * @param NodeLattice right hand side node reference
    * @return If cell indicies are equal
    */
-  bool operator==(const NodeSE2 & rhs)
+  bool operator==(const NodeLattice & rhs)
   {
     return this->_index == rhs._index;
   }
@@ -204,24 +145,6 @@ public:
   void reset();
 
   /**
-   * @brief Gets the accumulated cost at this node
-   * @return accumulated cost
-   */
-  inline float & getAccumulatedCost()
-  {
-    return _accumulated_cost;
-  }
-
-  /**
-   * @brief Sets the accumulated cost at this node
-   * @param reference to accumulated cost
-   */
-  inline void setAccumulatedCost(const float cost_in)
-  {
-    _accumulated_cost = cost_in;
-  }
-
-  /**
    * @brief Sets the motion primitive index used to achieve node in search
    * @param reference to motion primitive idx
    */
@@ -237,6 +160,24 @@ public:
   inline unsigned int & getMotionPrimitiveIndex()
   {
     return _motion_primitive_index;
+  }
+
+  /**
+   * @brief Gets the accumulated cost at this node
+   * @return accumulated cost
+   */
+  inline float & getAccumulatedCost()
+  {
+    return _accumulated_cost;
+  }
+
+  /**
+   * @brief Sets the accumulated cost at this node
+   * @param reference to accumulated cost
+   */
+  inline void setAccumulatedCost(const float & cost_in)
+  {
+    _accumulated_cost = cost_in;
   }
 
   /**
@@ -297,7 +238,7 @@ public:
    * @param traverse_unknown If we can explore unknown nodes on the graph
    * @return whether this node is valid and collision free
    */
-  bool isNodeValid(const bool & traverse_unknown, GridCollisionChecker collision_checker);
+  bool isNodeValid(const bool & traverse_unknown, GridCollisionChecker * collision_checker);
 
   /**
    * @brief Get traversal cost of parent node to child node
@@ -311,28 +252,13 @@ public:
    * @param x X coordinate of point
    * @param y Y coordinate of point
    * @param angle Theta coordinate of point
-   * @param width Width of costmap
-   * @param angle_quantization Number of theta bins
-   * @return Index
-   */
-  static inline unsigned int getIndex(
-    const unsigned int & x, const unsigned int & y, const unsigned int & angle,
-    const unsigned int & width, const unsigned int angle_quantization)
-  {
-    return angle + x * angle_quantization + y * width * angle_quantization;
-  }
-
-  /**
-   * @brief Get index at coordinates
-   * @param x X coordinate of point
-   * @param y Y coordinate of point
-   * @param angle Theta coordinate of point
    * @return Index
    */
   static inline unsigned int getIndex(
     const unsigned int & x, const unsigned int & y, const unsigned int & angle)
   {
-    return getIndex(
+    // Hybrid-A* and State Lattice share a coordinate system
+    return NodeHybrid::getIndex(
       x, y, angle, motion_table.size_x,
       motion_table.num_angle_quantization);
   }
@@ -346,9 +272,10 @@ public:
    */
   static inline Coordinates getCoords(
     const unsigned int & index,
-    const unsigned int & width, const unsigned int angle_quantization)
+    const unsigned int & width, const unsigned int & angle_quantization)
   {
-    return Coordinates(
+    // Hybrid-A* and State Lattice share a coordinate system
+    return NodeHybrid::Coordinates(
       (index / angle_quantization) % width,    // x
       index / (angle_quantization * width),    // y
       index % angle_quantization);    // theta
@@ -358,11 +285,13 @@ public:
    * @brief Get cost of heuristic of node
    * @param node Node index current
    * @param node Node index of new
+   * @param costmap Costmap ptr to use
    * @return Heuristic cost between the nodes
    */
   static float getHeuristicCost(
     const Coordinates & node_coords,
-    const Coordinates & goal_coordinates);
+    const Coordinates & goal_coordinates,
+    const nav2_costmap_2d::Costmap2D * costmap);
 
   /**
    * @brief Initialize motion models
@@ -380,35 +309,83 @@ public:
     SearchInfo & search_info);
 
   /**
-   * @brief Compute the wavefront heuristic
-   * @param costmap Costmap to use to compute heuristic
-   * @param start_x Coordinate of Start X
-   * @param start_y Coordinate of Start Y
-   * @param goal_x Coordinate of Goal X
-   * @param goal_y Coordinate of Goal Y
+   * @brief Compute the SE2 distance heuristic
+   * @param lookup_table_dim Size, in costmap pixels, of the
+   * each lookup table dimension to populate
+   * @param motion_model Motion model to use for state space
+   * @param dim_3_size Number of quantization bins for caching
+   * @param search_info Info containing minimum radius to use
    */
-  static void computeWavefrontHeuristic(
-    nav2_costmap_2d::Costmap2D * & costmap,
-    const unsigned int & start_x, const unsigned int & start_y,
-    const unsigned int & goal_x, const unsigned int & goal_y);
+  static void precomputeDistanceHeuristic(
+    const float & lookup_table_dim,
+    const MotionModel & motion_model,
+    const unsigned int & dim_3_size,
+    const SearchInfo & search_info)
+  {
+    // State Lattice and Hybrid-A* share this heuristics
+    NodeHybrid::precomputeDistanceHeuristic(
+      lookup_table_dim, motion_model, dim_3_size,
+      search_info);
+  }
+
+  /**
+   * @brief Compute the wavefront heuristic
+   * @param costmap Costmap to use
+   * @param goal_coords Coordinates to start heuristic expansion at
+   */
+  static void resetObstacleHeuristic(
+    const nav2_costmap_2d::Costmap2D * costmap,
+    const unsigned int & goal_x, const unsigned int & goal_y)
+  {
+    // State Lattice and Hybrid-A* share this heuristics
+    NodeHybrid::resetObstacleHeuristic(costmap, goal_x, goal_y);
+  }
+
+  /**
+   * @brief Compute the Obstacle heuristic
+   * @param costmap Costmap ptr to use
+   * @param node_coords Coordinates to get heuristic at
+   * @param goal_coords Coordinates to compute heuristic to
+   * @return heuristic Heuristic value
+   */
+  static float getObstacleHeuristic(
+    const nav2_costmap_2d::Costmap2D * costmap,
+    const Coordinates & node_coords,
+    const Coordinates & goal_coords)
+  {
+    return NodeHybrid::getObstacleHeuristic(costmap, node_coords, goal_coords);
+  }
+
+  /**
+   * @brief Compute the Distance heuristic
+   * @param node_coords Coordinates to get heuristic at
+   * @param goal_coords Coordinates to compute heuristic to
+   * @param obstacle_heuristic Value of the obstacle heuristic to compute
+   * additional motion heuristics if required
+   * @return heuristic Heuristic value
+   */
+  static float getDistanceHeuristic(
+    const Coordinates & node_coords,
+    const Coordinates & goal_coords,
+    const float & obstacle_heuristic);
 
   /**
    * @brief Retrieve all valid neighbors of a node.
-   * @param node Pointer to the node we are currently exploring in A*
    * @param validity_checker Functor for state validity checking
+   * @param collision_checker Collision checker to use
+   * @param traverse_unknown If unknown costs are valid to traverse
    * @param neighbors Vector of neighbors to be filled
    */
-  static void getNeighbors(
-    const NodePtr & node,
-    std::function<bool(const unsigned int &, nav2_smac_planner::NodeSE2 * &)> & validity_checker,
-    GridCollisionChecker collision_checker,
+  void getNeighbors(
+    std::function<bool(const unsigned int &,
+    nav2_smac_planner::NodeLattice * &)> & validity_checker,
+    GridCollisionChecker * collision_checker,
     const bool & traverse_unknown,
     NodeVector & neighbors);
 
-  NodeSE2 * parent;
+  NodeLattice * parent;
   Coordinates pose;
-  static double neutral_cost;
-  static MotionTable motion_table;
+  static LatticeMotionTable motion_table;
 
 private:
   float _cell_cost;
@@ -417,9 +394,8 @@ private:
   bool _was_visited;
   bool _is_queued;
   unsigned int _motion_primitive_index;
-  static std::vector<unsigned int> _wavefront_heuristic;
 };
 
 }  // namespace nav2_smac_planner
 
-#endif  // NAV2_SMAC_PLANNER__NODE_SE2_HPP_
+#endif  // NAV2_SMAC_PLANNER__NODE_LATTICE_HPP_

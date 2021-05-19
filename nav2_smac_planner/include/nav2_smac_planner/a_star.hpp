@@ -27,7 +27,8 @@
 #include "nav2_costmap_2d/costmap_2d.hpp"
 
 #include "nav2_smac_planner/node_2d.hpp"
-#include "nav2_smac_planner/node_se2.hpp"
+#include "nav2_smac_planner/node_hybrid.hpp"
+#include "nav2_smac_planner/node_lattice.hpp"
 #include "nav2_smac_planner/node_basic.hpp"
 #include "nav2_smac_planner/types.hpp"
 #include "nav2_smac_planner/constants.hpp"
@@ -97,7 +98,9 @@ public:
   void initialize(
     const bool & allow_unknown,
     int & max_iterations,
-    const int & max_on_approach_iterations);
+    const int & max_on_approach_iterations,
+    const float & lookup_table_size,
+    const unsigned int & dim_3_size);
 
   /**
    * @brief Creating path from given costmap, start, and goal
@@ -109,18 +112,10 @@ public:
   bool createPath(CoordinateVector & path, int & num_iterations, const float & tolerance);
 
   /**
-   * @brief Create the graph based on the node type. For 2D nodes, a cost grid.
-   *   For 3D nodes, a SE2 grid without cost info as needs collision detector for footprint.
-   * @param x The total number of nodes in the X direction
-   * @param y The total number of nodes in the X direction
-   * @param dim_3 The total number of nodes in the theta or Z direction
-   * @param costmap Costmap to convert into the graph
+   * @brief Sets the collision checker to use
+   * @param collision_checker Collision checker to use for checking state validity
    */
-  void createGraph(
-    const unsigned int & x,
-    const unsigned int & y,
-    const unsigned int & dim_3,
-    nav2_costmap_2d::Costmap2D * & costmap);
+  void setCollisionChecker(GridCollisionChecker * collision_checker);
 
   /**
    * @brief Set the goal for planning, as a node index
@@ -143,13 +138,6 @@ public:
     const unsigned int & mx,
     const unsigned int & my,
     const unsigned int & dim_3);
-
-  /**
-   * @brief Set the footprint
-   * @param footprint footprint of robot
-   * @param use_radius Whether this footprint is a circle with radius
-   */
-  void setFootprint(nav2_costmap_2d::Footprint footprint, bool use_radius);
 
   /**
    * @brief Perform an analytic path expansion to the goal
@@ -227,7 +215,7 @@ protected:
    * @param cost The cost to sort into the open set of the node
    * @param node Node pointer reference to add to open set
    */
-  inline void addNode(const float cost, NodePtr & node);
+  inline void addNode(const float & cost, NodePtr & node);
 
   /**
    * @brief Adds node to graph
@@ -310,9 +298,7 @@ protected:
   MotionModel _motion_model;
   NodeHeuristicPair _best_heuristic_node;
 
-  GridCollisionChecker _collision_checker;
-  nav2_costmap_2d::Footprint _footprint;
-  bool _is_radius_footprint;
+  GridCollisionChecker * _collision_checker;
   nav2_costmap_2d::Costmap2D * _costmap;
 };
 
