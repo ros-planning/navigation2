@@ -19,7 +19,20 @@ repositories:
     type: git
     url: https://github.com/ros/bond_core.git
     version: ros2
+  ros/diagnostics:
+    type: git
+    url: https://github.com/ros/diagnostics.git
+    version: ros2-devel   
+  ros/geographic_info:
+    type: git
+    url: https://github.com/ros-geographic-info/geographic_info.git
+    version: ros2      
   ompl/ompl:
     type: git
     url: https://github.com/ompl/ompl.git
     version: 1.5.0
+  robot_localization/robot_localization:
+    type: git
+    url:  https://github.com/cra-ros-pkg/robot_localization.git
+    version: foxy-devel
+    
