@@ -97,4 +97,4 @@ TEST(LifeycleCLI, succeeds_node_name)
   SUCCEED();
 }
 
-#endif  // NAV2_UTIL__TEST__TEST_LIFECYCLE_CLI_NODE_HPP_
+#endif  // _NAV2_UTIL__TEST__TEST_LIFECYCLE_CLI_NODE_HPP_
