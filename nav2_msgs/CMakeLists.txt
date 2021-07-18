@@ -9,6 +9,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 nav2_package()
 
@@ -29,6 +30,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ManageLifecycleNodes.srv"
   "srv/LoadMap.srv"
   "srv/SaveMap.srv"
+  "srv/LoadMap3D.srv"
+  "srv/GetMap3D.srv"
+  "srv/SaveMap3D.srv"
   "action/BackUp.action"
   "action/ComputePathToPose.action"
   "action/ComputePathThroughPoses.action"
@@ -39,7 +43,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Spin.action"
   "action/DummyRecovery.action"
   "action/FollowWaypoints.action"
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs action_msgs nav_msgs
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs action_msgs nav_msgs sensor_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

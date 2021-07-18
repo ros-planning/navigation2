@@ -15,13 +15,14 @@
 #include <gtest/gtest.h>
 #include <experimental/filesystem>
 #include <rclcpp/rclcpp.hpp>
-#include <string>
 #include <memory>
 
 #include "test_constants/test_constants.h"
-#include "nav2_map_server/map_server.hpp"
 #include "nav2_util/lifecycle_service_client.hpp"
+
+#include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav2_msgs/srv/load_map.hpp"
+#include "nav_msgs/srv/get_map.hpp"
 
 #define TEST_DIR TEST_DIRECTORY
 
@@ -82,7 +83,7 @@ public:
 protected:
   // Check that map_msg corresponds to reference pattern
   // Input: map_msg
-  void verifyMapMsg(const nav_msgs::msg::OccupancyGrid & map_msg)
+  static void verifyMapMsg(const nav_msgs::msg::OccupancyGrid & map_msg)
   {
     ASSERT_FLOAT_EQ(map_msg.info.resolution, g_valid_image_res);
     ASSERT_EQ(map_msg.info.width, g_valid_image_width);

@@ -16,9 +16,12 @@
 #include <string>
 #include <memory>
 
-#include "rclcpp/rclcpp.hpp"
-#include "nav2_map_server/map_io.hpp"
 #include "test_constants/test_constants.h"
+#include "rclcpp/rclcpp.hpp"
+
+#include "nav_msgs/msg/occupancy_grid.hpp"
+
+#include "nav2_map_server/map_2d/map_io_2d.hpp"
 
 #define TEST_DIR TEST_DIRECTORY
 
@@ -33,12 +36,13 @@ public:
   {
     std::string pub_map_file = path(TEST_DIR) / path(g_valid_yaml_file);
     nav_msgs::msg::OccupancyGrid msg;
-    LOAD_MAP_STATUS status = loadMapFromYaml(pub_map_file, msg);
-    if (status != LOAD_MAP_SUCCESS) {
+    map_2d::LOAD_MAP_STATUS status = map_2d::loadMapFromYaml(pub_map_file, msg);
+    if (status != map_2d::LOAD_MAP_STATUS::LOAD_MAP_SUCCESS) {
       RCLCPP_ERROR(get_logger(), "Can not load %s map file", pub_map_file.c_str());
       return;
     }
 
+    // Creating publisher with message type nav_msgs::msg::OccupancyGrid
     map_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(
       "map",
       rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());

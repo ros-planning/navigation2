@@ -12,39 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAV2_MAP_SERVER__MAP_SERVER_HPP_
-#define NAV2_MAP_SERVER__MAP_SERVER_HPP_
+#ifndef NAV2_MAP_SERVER__MAP_2D__MAP_SERVER_2D_HPP_
+#define NAV2_MAP_SERVER__MAP_2D__MAP_SERVER_2D_HPP_
 
 #include <string>
 #include <memory>
-#include <functional>
 
-#include "rclcpp/rclcpp.hpp"
-#include "nav2_util/lifecycle_node.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/srv/get_map.hpp"
 #include "nav2_msgs/srv/load_map.hpp"
+
+#include "rclcpp/rclcpp.hpp"
+#include "nav2_util/lifecycle_node.hpp"
 
 namespace nav2_map_server
 {
 
 /**
- * @class nav2_map_server::MapServer
+ * @class nav2_map_server::MapServer2D
  * @brief Parses the map yaml file and creates a service and a publisher that
- * provides occupancy grid
+ * provides occupancy grid, hosts GetMap, and LoadMap services.
+ * GetMap service default name : "map"
+ * LoadMap service default name : "load_map"
  */
-class MapServer : public nav2_util::LifecycleNode
+class MapServer2D : public nav2_util::LifecycleNode
 {
 public:
   /**
-   * @brief A constructor for nav2_map_server::MapServer
+   * @brief A constructor for nav2_map_server::MapServer2D
    */
-  MapServer();
+  MapServer2D();
 
   /**
-   * @brief A Destructor for nav2_map_server::MapServer
+   * @brief A Destructor for nav2_map_server::MapServer2D
    */
-  ~MapServer();
+  ~MapServer2D() override;
 
 protected:
   /**
@@ -96,7 +98,7 @@ protected:
   void updateMsgHeader();
 
   /**
-   * @brief Map getting service callback
+   * @brief Map getting service callback for image
    * @param request_header Service request header
    * @param request Service request
    * @param response Service response
@@ -107,7 +109,7 @@ protected:
     std::shared_ptr<nav_msgs::srv::GetMap::Response> response);
 
   /**
-   * @brief Map loading service callback
+   * @brief Map loading service callback for image
    * @param request_header Service request header
    * @param request Service request
    * @param response Service response
@@ -141,4 +143,4 @@ protected:
 
 }  // namespace nav2_map_server
 
-#endif  // NAV2_MAP_SERVER__MAP_SERVER_HPP_
+#endif  // NAV2_MAP_SERVER__MAP_2D__MAP_SERVER_2D_HPP_

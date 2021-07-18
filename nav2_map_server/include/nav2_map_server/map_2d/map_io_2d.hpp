@@ -14,18 +14,21 @@
 
 /* OccupancyGrid map input-output library */
 
-#ifndef NAV2_MAP_SERVER__MAP_IO_HPP_
-#define NAV2_MAP_SERVER__MAP_IO_HPP_
+#ifndef NAV2_MAP_SERVER__MAP_2D__MAP_IO_2D_HPP_
+#define NAV2_MAP_SERVER__MAP_2D__MAP_IO_2D_HPP_
 
 #include <string>
 #include <vector>
 
-#include "nav2_map_server/map_mode.hpp"
+#include "nav2_map_server/map_2d/map_mode.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 
 /* Map input part */
 
 namespace nav2_map_server
+{
+
+namespace map_2d
 {
 
 struct LoadParameters
@@ -39,13 +42,13 @@ struct LoadParameters
   bool negate;
 };
 
-typedef enum
+enum class LOAD_MAP_STATUS
 {
   LOAD_MAP_SUCCESS,
   MAP_DOES_NOT_EXIST,
   INVALID_MAP_METADATA,
   INVALID_MAP_DATA
-} LOAD_MAP_STATUS;
+};
 
 /**
  * @brief Load and parse the given YAML file
@@ -98,6 +101,8 @@ bool saveMapToFile(
   const nav_msgs::msg::OccupancyGrid & map,
   const SaveParameters & save_parameters);
 
+}  // namespace map_2d
+
 }  // namespace nav2_map_server
 
-#endif  // NAV2_MAP_SERVER__MAP_IO_HPP_
+#endif  // NAV2_MAP_SERVER__MAP_2D__MAP_IO_2D_HPP_

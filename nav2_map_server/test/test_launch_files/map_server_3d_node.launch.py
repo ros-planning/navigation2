@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Copyright (c) 2020 Shivam Pandey
 # Copyright (c) 2018 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +22,11 @@ import launch_ros.actions
 
 
 def generate_launch_description():
-    mapFile = os.getenv('TEST_MAP')
     return LaunchDescription([
         launch_ros.actions.Node(
             package='nav2_map_server',
-            executable='map_server_2d',
-            name='map_server',
+            executable='map_server_3d',
             output='screen',
-            parameters=[{'yaml_filename': mapFile}])
+            parameters=[os.path.join(os.getenv('TEST_DIR'),
+                                     'map_server_3d_params.yaml')])
     ])

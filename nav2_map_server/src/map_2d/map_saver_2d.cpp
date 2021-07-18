@@ -29,19 +29,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "nav2_map_server/map_saver.hpp"
+#include "nav2_map_server/map_2d/map_saver_2d.hpp"
 
 #include <string>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <functional>
-#include <mutex>
+
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 using namespace std::placeholders;
 
 namespace nav2_map_server
 {
-MapSaver::MapSaver()
+
+MapSaver2D::MapSaver2D()
 : nav2_util::LifecycleNode("map_saver", "", true)
 {
   RCLCPP_INFO(get_logger(), "Creating");
@@ -54,12 +57,12 @@ MapSaver::MapSaver()
   map_subscribe_transient_local_ = declare_parameter("map_subscribe_transient_local", true);
 }
 
-MapSaver::~MapSaver()
+MapSaver2D::~MapSaver2D()
 {
 }
 
 nav2_util::CallbackReturn
-MapSaver::on_configure(const rclcpp_lifecycle::State & /*state*/)
+MapSaver2D::on_configure(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Configuring");
 
@@ -69,13 +72,13 @@ MapSaver::on_configure(const rclcpp_lifecycle::State & /*state*/)
   // Create a service that saves the occupancy grid from map topic to a file
   save_map_service_ = create_service<nav2_msgs::srv::SaveMap>(
     service_prefix + save_map_service_name_,
-    std::bind(&MapSaver::saveMapCallback, this, _1, _2, _3));
+    std::bind(&MapSaver2D::saveMapCallback, this, _1, _2, _3));
 
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
 nav2_util::CallbackReturn
-MapSaver::on_activate(const rclcpp_lifecycle::State & /*state*/)
+MapSaver2D::on_activate(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Activating");
 
@@ -86,7 +89,7 @@ MapSaver::on_activate(const rclcpp_lifecycle::State & /*state*/)
 }
 
 nav2_util::CallbackReturn
-MapSaver::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
+MapSaver2D::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Deactivating");
 
@@ -97,7 +100,7 @@ MapSaver::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
 }
 
 nav2_util::CallbackReturn
-MapSaver::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
+MapSaver2D::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Cleaning up");
 
@@ -107,27 +110,27 @@ MapSaver::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
 }
 
 nav2_util::CallbackReturn
-MapSaver::on_shutdown(const rclcpp_lifecycle::State & /*state*/)
+MapSaver2D::on_shutdown(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Shutting down");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-void MapSaver::saveMapCallback(
+void MapSaver2D::saveMapCallback(
   const std::shared_ptr<rmw_request_id_t>/*request_header*/,
   const std::shared_ptr<nav2_msgs::srv::SaveMap::Request> request,
   std::shared_ptr<nav2_msgs::srv::SaveMap::Response> response)
 {
   // Set input arguments and call saveMapTopicToFile()
-  SaveParameters save_parameters;
+  map_2d::SaveParameters save_parameters;
   save_parameters.map_file_name = request->map_url;
   save_parameters.image_format = request->image_format;
   save_parameters.free_thresh = request->free_thresh;
   save_parameters.occupied_thresh = request->occupied_thresh;
   try {
-    save_parameters.mode = map_mode_from_string(request->map_mode);
+    save_parameters.mode = map_2d::map_mode_from_string(request->map_mode);
   } catch (std::invalid_argument &) {
-    save_parameters.mode = MapMode::Trinary;
+    save_parameters.mode = map_2d::MapMode::Trinary;
     RCLCPP_WARN(
       get_logger(), "Map mode parameter not recognized: '%s', using default value (trinary)",
       request->map_mode.c_str());
@@ -136,13 +139,13 @@ void MapSaver::saveMapCallback(
   response->result = saveMapTopicToFile(request->map_topic, save_parameters);
 }
 
-bool MapSaver::saveMapTopicToFile(
+bool MapSaver2D::saveMapTopicToFile(
   const std::string & map_topic,
-  const SaveParameters & save_parameters)
+  const map_2d::SaveParameters & save_parameters)
 {
   // Local copies of map_topic and save_parameters that could be changed
   std::string map_topic_loc = map_topic;
-  SaveParameters save_parameters_loc = save_parameters;
+  map_2d::SaveParameters save_parameters_loc = save_parameters;
 
   RCLCPP_INFO(
     get_logger(), "Saving map from \'%s\' topic to \'%s\' file",
@@ -156,7 +159,7 @@ bool MapSaver::saveMapTopicToFile(
     std::recursive_mutex access;
 
     // Correct map_topic_loc if necessary
-    if (map_topic_loc == "") {
+    if (map_topic_loc.empty()) {
       map_topic_loc = "map";
       RCLCPP_WARN(
         get_logger(), "Map topic unspecified. Map messages will be read from \'%s\' topic",

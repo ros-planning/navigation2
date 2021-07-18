@@ -1,12 +1,18 @@
 include_directories(${PROJECT_SOURCE_DIR}/test)
 
-# map_io unit test
-ament_add_gtest(test_map_io test_map_io.cpp ${PROJECT_SOURCE_DIR}/test/test_constants.cpp)
+# map_io unit test for 2D-I/O
+ament_add_gtest(test_map_io_2d test_map_io_2d.cpp ${PROJECT_SOURCE_DIR}/test/test_constants.cpp)
+ament_target_dependencies(test_map_io_2d rclcpp nav2_util)
+target_link_libraries(test_map_io_2d
+  ${map_io_library_name}_2d
+  stdc++fs
+)
 
-ament_target_dependencies(test_map_io rclcpp nav_msgs)
-
-target_link_libraries(test_map_io
-  ${map_io_library_name}
+# map_io unit test for 3D-I/O
+ament_add_gtest(test_map_io_3d test_map_io_3d.cpp ${PROJECT_SOURCE_DIR}/test/test_constants.cpp)
+ament_target_dependencies(test_map_io_3d rclcpp nav2_util geometry_msgs sensor_msgs)
+target_link_libraries(test_map_io_3d
+  ${map_io_library_name}_3d
   stdc++fs
 )
 

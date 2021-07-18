@@ -13,13 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
 #include <stdexcept>
 
-#include "nav2_map_server/map_mode.hpp"
-#include "nav2_map_server/map_saver.hpp"
+#include "nav2_map_server/map_2d/map_mode.hpp"
+#include "nav2_map_server/map_2d/map_saver_2d.hpp"
+#include "nav2_map_server/map_3d/map_saver_3d.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -31,12 +35,16 @@ const char * USAGE_STRING{
   "\n"
   "Arguments:\n"
   "  -h/--help\n"
+  "\n-----Parameters common to 2D and 3D map saver-----\n\n"
   "  -t <map_topic>\n"
-  "  -f <mapname>\n"
+  "  -f <map_name>\n"
+  "  --fmt <map_format> (Supported Formats: <pgm/bmp/png> for 2D and <pcd> for 3D)\n"
+  "\n-----Parameters unique to 2D map saver-----\n\n"
   "  --occ <threshold_occupied>\n"
   "  --free <threshold_free>\n"
-  "  --fmt <image_format>\n"
   "  --mode trinary(default)/scale/raw\n"
+  "\n-----Parameters unique to 3D map saver-----\n\n"
+  "  --as_bin Give the flag to save map with binary encodings\n"
   "\n"
   "NOTE: --ros-args should be passed at the end of command line"};
 
@@ -47,7 +55,8 @@ typedef enum
   COMMAND_IMAGE_FORMAT,
   COMMAND_OCCUPIED_THRESH,
   COMMAND_FREE_THRESH,
-  COMMAND_MODE
+  COMMAND_MODE,
+  COMMAND_ENCODING,
 } COMMAND_TYPE;
 
 struct cmd_struct
@@ -63,12 +72,20 @@ typedef enum
   HELP_MESSAGE
 } ARGUMENTS_STATUS;
 
+struct SaveParamList
+{
+  // 2D parameters
+  map_2d::SaveParameters save_parameters_2d;
+  // 3D parameters
+  map_3d::SaveParameters save_parameters_3d;
+};
+
 // Arguments parser
 // Input parameters: logger, argc, argv
 // Output parameters: map_topic, save_parameters
 ARGUMENTS_STATUS parse_arguments(
   const rclcpp::Logger & logger, int argc, char ** argv,
-  std::string & map_topic, SaveParameters & save_parameters)
+  std::string & map_topic, SaveParamList & save_parameters)
 {
   const struct cmd_struct commands[] = {
     {"-t", COMMAND_MAP_TOPIC},
@@ -76,7 +93,8 @@ ARGUMENTS_STATUS parse_arguments(
     {"--occ", COMMAND_OCCUPIED_THRESH},
     {"--free", COMMAND_FREE_THRESH},
     {"--mode", COMMAND_MODE},
-    {"--fmt", COMMAND_IMAGE_FORMAT},
+    {"--as_bin", COMMAND_ENCODING},
+    {"--fmt", COMMAND_IMAGE_FORMAT}
   };
 
   std::vector<std::string> arguments(argv + 1, argv + argc);
@@ -105,27 +123,33 @@ ARGUMENTS_STATUS parse_arguments(
             map_topic = *it;
             break;
           case COMMAND_MAP_FILE_NAME:
-            save_parameters.map_file_name = *it;
+            save_parameters.save_parameters_2d.map_file_name = *it;
+            save_parameters.save_parameters_3d.map_file_name = *it;
             break;
           case COMMAND_FREE_THRESH:
-            save_parameters.free_thresh = atof(it->c_str());
+            save_parameters.save_parameters_2d.free_thresh = std::atof(it->c_str());
             break;
           case COMMAND_OCCUPIED_THRESH:
-            save_parameters.occupied_thresh = atof(it->c_str());
+            save_parameters.save_parameters_2d.occupied_thresh = std::atof(it->c_str());
             break;
           case COMMAND_IMAGE_FORMAT:
-            save_parameters.image_format = *it;
+            save_parameters.save_parameters_2d.image_format = *it;
+            save_parameters.save_parameters_3d.format = *it;
             break;
           case COMMAND_MODE:
             try {
-              save_parameters.mode = map_mode_from_string(*it);
+              save_parameters.save_parameters_2d.mode = map_2d::map_mode_from_string(*it);
             } catch (std::invalid_argument &) {
-              save_parameters.mode = MapMode::Trinary;
+              save_parameters.save_parameters_2d.mode = map_2d::MapMode::Trinary;
               RCLCPP_WARN(
                 logger,
                 "Map mode parameter not recognized: %s, using default value (trinary)",
                 it->c_str());
             }
+            break;
+          case COMMAND_ENCODING:
+            it--;  // as this one is a simple flag that puts binary format to on
+            save_parameters.save_parameters_3d.as_binary = true;
             break;
         }
         break;
@@ -147,7 +171,7 @@ int main(int argc, char ** argv)
   auto logger = rclcpp::get_logger("map_saver_cli");
 
   // Parse CLI-arguments
-  SaveParameters save_parameters;
+  SaveParamList save_parameters;
   std::string map_topic = "map";
   switch (parse_arguments(logger, argc, argv, map_topic, save_parameters)) {
     case ARGUMENTS_INVALID:
@@ -161,13 +185,26 @@ int main(int argc, char ** argv)
   }
 
   // Call saveMapTopicToFile()
-  int retcode;
+  int retcode{1};
   try {
-    auto map_saver = std::make_shared<nav2_map_server::MapSaver>();
-    if (map_saver->saveMapTopicToFile(map_topic, save_parameters)) {
-      retcode = 0;
+    if (save_parameters.save_parameters_3d.format == "pcd" &&
+      save_parameters.save_parameters_3d.format == "ply")
+    {
+      auto map_saver = std::make_shared<nav2_map_server::MapSaver3D>();
+      if (map_saver->saveMapTopicToFile(
+          map_topic,
+          save_parameters.save_parameters_3d))
+      {
+        retcode = 0;
+      } else {
+        retcode = 1;
+      }
+
     } else {
-      retcode = 1;
+      auto map_saver = std::make_shared<nav2_map_server::MapSaver2D>();
+      if (map_saver->saveMapTopicToFile(map_topic, save_parameters.save_parameters_2d)) {
+        retcode = 0;
+      }
     }
   } catch (std::exception & e) {
     RCLCPP_ERROR(logger, "Unexpected problem appear: %s", e.what());

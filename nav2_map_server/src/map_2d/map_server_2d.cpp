@@ -44,17 +44,15 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "nav2_map_server/map_server.hpp"
+#include "nav2_map_server/map_2d/map_server_2d.hpp"
 
 #include <string>
 #include <memory>
-#include <fstream>
 #include <stdexcept>
 #include <utility>
 
-#include "yaml-cpp/yaml.h"
 #include "lifecycle_msgs/msg/state.hpp"
-#include "nav2_map_server/map_io.hpp"
+#include "nav2_map_server/map_2d/map_io_2d.hpp"
 
 using namespace std::chrono_literals;
 using namespace std::placeholders;
@@ -62,7 +60,7 @@ using namespace std::placeholders;
 namespace nav2_map_server
 {
 
-MapServer::MapServer()
+MapServer2D::MapServer2D()
 : nav2_util::LifecycleNode("map_server")
 {
   RCLCPP_INFO(get_logger(), "Creating");
@@ -73,12 +71,13 @@ MapServer::MapServer()
   declare_parameter("frame_id", "map");
 }
 
-MapServer::~MapServer()
+MapServer2D::~MapServer2D()
 {
 }
 
 nav2_util::CallbackReturn
-MapServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
+MapServer2D::on_configure(
+  const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Configuring");
 
@@ -103,7 +102,7 @@ MapServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
   // Create a service that provides the occupancy grid
   occ_service_ = create_service<nav_msgs::srv::GetMap>(
     service_prefix + std::string(service_name_),
-    std::bind(&MapServer::getMapCallback, this, _1, _2, _3));
+    std::bind(&MapServer2D::getMapCallback, this, _1, _2, _3));
 
   // Create a publisher using the QoS settings to emulate a ROS1 latched topic
   occ_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(
@@ -113,13 +112,13 @@ MapServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
   // Create a service that loads the occupancy grid from a file
   load_map_service_ = create_service<nav2_msgs::srv::LoadMap>(
     service_prefix + std::string(load_map_service_name_),
-    std::bind(&MapServer::loadMapCallback, this, _1, _2, _3));
+    std::bind(&MapServer2D::loadMapCallback, this, _1, _2, _3));
 
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
 nav2_util::CallbackReturn
-MapServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
+MapServer2D::on_activate(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Activating");
 
@@ -135,7 +134,7 @@ MapServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
 }
 
 nav2_util::CallbackReturn
-MapServer::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
+MapServer2D::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Deactivating");
 
@@ -148,7 +147,7 @@ MapServer::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
 }
 
 nav2_util::CallbackReturn
-MapServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
+MapServer2D::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Cleaning up");
 
@@ -160,13 +159,13 @@ MapServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
 }
 
 nav2_util::CallbackReturn
-MapServer::on_shutdown(const rclcpp_lifecycle::State & /*state*/)
+MapServer2D::on_shutdown(const rclcpp_lifecycle::State & /*state*/)
 {
   RCLCPP_INFO(get_logger(), "Shutting down");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-void MapServer::getMapCallback(
+void MapServer2D::getMapCallback(
   const std::shared_ptr<rmw_request_id_t>/*request_header*/,
   const std::shared_ptr<nav_msgs::srv::GetMap::Request>/*request*/,
   std::shared_ptr<nav_msgs::srv::GetMap::Response> response)
@@ -182,7 +181,7 @@ void MapServer::getMapCallback(
   response->map = msg_;
 }
 
-void MapServer::loadMapCallback(
+void MapServer2D::loadMapCallback(
   const std::shared_ptr<rmw_request_id_t>/*request_header*/,
   const std::shared_ptr<nav2_msgs::srv::LoadMap::Request> request,
   std::shared_ptr<nav2_msgs::srv::LoadMap::Response> response)
@@ -202,22 +201,22 @@ void MapServer::loadMapCallback(
   }
 }
 
-bool MapServer::loadMapResponseFromYaml(
+bool MapServer2D::loadMapResponseFromYaml(
   const std::string & yaml_file,
   std::shared_ptr<nav2_msgs::srv::LoadMap::Response> response)
 {
-  switch (loadMapFromYaml(yaml_file, msg_)) {
-    case MAP_DOES_NOT_EXIST:
+  switch (map_2d::loadMapFromYaml(yaml_file, msg_)) {
+    case map_2d::LOAD_MAP_STATUS::MAP_DOES_NOT_EXIST:
       response->result = nav2_msgs::srv::LoadMap::Response::RESULT_MAP_DOES_NOT_EXIST;
       return false;
-    case INVALID_MAP_METADATA:
+    case map_2d::LOAD_MAP_STATUS::INVALID_MAP_METADATA:
       response->result = nav2_msgs::srv::LoadMap::Response::RESULT_INVALID_MAP_METADATA;
       return false;
-    case INVALID_MAP_DATA:
+    case map_2d::LOAD_MAP_STATUS::INVALID_MAP_DATA:
       response->result = nav2_msgs::srv::LoadMap::Response::RESULT_INVALID_MAP_DATA;
       return false;
-    case LOAD_MAP_SUCCESS:
-      // Correcting msg_ header when it belongs to spiecific node
+    case map_2d::LOAD_MAP_STATUS::LOAD_MAP_SUCCESS:
+      // Correcting msg_ header when it belongs to specific node
       updateMsgHeader();
 
       response->map = msg_;
@@ -227,7 +226,7 @@ bool MapServer::loadMapResponseFromYaml(
   return true;
 }
 
-void MapServer::updateMsgHeader()
+void MapServer2D::updateMsgHeader()
 {
   msg_.info.map_load_time = now();
   msg_.header.frame_id = frame_id_;

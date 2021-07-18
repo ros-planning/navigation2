@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Copyright (c) 2020 Shivam Pandey
 # Copyright (c) 2020 Samsung Research Russia
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,28 +25,24 @@ def generate_launch_description():
     use_sim_time = True
     autostart = True
     save_map_timeout = 2.0
-    free_thresh_default = 0.25
-    occupied_thresh_default = 0.65
 
     # Nodes launching commands
     start_map_saver_server_cmd = launch_ros.actions.Node(
-            package='nav2_map_server',
-            executable='map_saver_server',
-            output='screen',
-            emulate_tty=True,  # https://github.com/ros2/launch/issues/188
-            parameters=[{'save_map_timeout': save_map_timeout},
-                        {'free_thresh_default': free_thresh_default},
-                        {'occupied_thresh_default': occupied_thresh_default}])
+        package='nav2_map_server',
+        executable='map_saver_server_3d',
+        output='screen',
+        emulate_tty=True,  # https://github.com/ros2/launch/issues/188
+        parameters=[{'save_map_timeout': save_map_timeout}])
 
     start_lifecycle_manager_cmd = launch_ros.actions.Node(
-            package='nav2_lifecycle_manager',
-            executable='lifecycle_manager',
-            name='lifecycle_manager',
-            output='screen',
-            emulate_tty=True,  # https://github.com/ros2/launch/issues/188
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': autostart},
-                        {'node_names': lifecycle_nodes}])
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager',
+        output='screen',
+        emulate_tty=True,  # https://github.com/ros2/launch/issues/188
+        parameters=[{'use_sim_time': use_sim_time},
+                    {'autostart': autostart},
+                    {'node_names': lifecycle_nodes}])
 
     ld = LaunchDescription()
 

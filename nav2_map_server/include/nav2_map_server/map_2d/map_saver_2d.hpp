@@ -13,37 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAV2_MAP_SERVER__MAP_SAVER_HPP_
-#define NAV2_MAP_SERVER__MAP_SAVER_HPP_
+#ifndef NAV2_MAP_SERVER__MAP_2D__MAP_SAVER_2D_HPP_
+#define NAV2_MAP_SERVER__MAP_2D__MAP_SAVER_2D_HPP_
 
 #include <string>
 #include <memory>
 
-#include "rclcpp/rclcpp.hpp"
-#include "nav2_util/lifecycle_node.hpp"
 #include "nav2_msgs/srv/save_map.hpp"
 
-#include "map_io.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "nav2_util/lifecycle_node.hpp"
+
+#include "nav2_map_server/map_2d/map_io_2d.hpp"
 
 namespace nav2_map_server
 {
 
 /**
- * @class nav2_map_server::MapSaver
+ * @class nav2_map_server::MapSaver2D
  * @brief A class that provides map saving methods and services
+ * for OccupancyGrid maps via. SaveMap service
+ * SaveMap service default name : save_map
  */
-class MapSaver : public nav2_util::LifecycleNode
+class MapSaver2D : public nav2_util::LifecycleNode
 {
 public:
   /**
-   * @brief Constructor for the nav2_map_server::MapSaver
+   * @brief Constructor for the nav2_map_server::MapSaver2D
    */
-  MapSaver();
+  MapSaver2D();
 
   /**
-   * @brief Destructor for the nav2_map_server::MapServer
+   * @brief Destructor for the nav2_map_server::MapServer2D
    */
-  ~MapSaver();
+  ~MapSaver2D() override;
 
   /**
    * @brief Read a message from incoming map topic and save map to a file
@@ -53,7 +56,7 @@ public:
    */
   bool saveMapTopicToFile(
     const std::string & map_topic,
-    const SaveParameters & save_parameters);
+    const map_2d::SaveParameters & save_parameters);
 
 protected:
   /**
@@ -114,4 +117,4 @@ protected:
 
 }  // namespace nav2_map_server
 
-#endif  // NAV2_MAP_SERVER__MAP_SAVER_HPP_
+#endif  // NAV2_MAP_SERVER__MAP_2D__MAP_SAVER_2D_HPP_
