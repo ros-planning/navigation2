@@ -32,7 +32,7 @@ namespace nav2_util
  * @class nav2_util::SimpleActionServer
  * @brief An action server wrapper to make applications simpler using Actions
  */
-template<typename ActionT, typename nodeT = rclcpp::Node>
+template<typename ActionT>
 class SimpleActionServer
 {
 public:
@@ -54,19 +54,24 @@ public:
    * @param action_name Name of the action to call
    * @param execute_callback Execution  callback function of Action
    * @param server_timeout Timeout to to react to stop or preemption requests
+   * @param options Options to pass to the underlying rcl_action_server_t
+   * @param group The action server will be added to this callback group
    */
+  template<typename NodeT>
   explicit SimpleActionServer(
-    typename nodeT::SharedPtr node,
+    NodeT node,
     const std::string & action_name,
     ExecuteCallback execute_callback,
     CompletionCallback completion_callback = nullptr,
-    std::chrono::milliseconds server_timeout = std::chrono::milliseconds(500))
+    std::chrono::milliseconds server_timeout = std::chrono::milliseconds(500),
+    const rcl_action_server_options_t & options = rcl_action_server_get_default_options(),
+    rclcpp::CallbackGroup::SharedPtr group = nullptr)
   : SimpleActionServer(
       node->get_node_base_interface(),
       node->get_node_clock_interface(),
       node->get_node_logging_interface(),
       node->get_node_waitables_interface(),
-      action_name, execute_callback, completion_callback, server_timeout)
+      action_name, execute_callback, completion_callback, server_timeout, options, group)
   {}
 
   /**
@@ -75,6 +80,8 @@ public:
    * @param action_name Name of the action to call
    * @param execute_callback Execution  callback function of Action
    * @param server_timeout Timeout to to react to stop or preemption requests
+   * @param options Options to pass to the underlying rcl_action_server_t
+   * @param group The action server will be added to this callback group
    */
   explicit SimpleActionServer(
     rclcpp::node_interfaces::NodeBaseInterface::SharedPtr node_base_interface,
@@ -84,7 +91,9 @@ public:
     const std::string & action_name,
     ExecuteCallback execute_callback,
     CompletionCallback completion_callback = nullptr,
-    std::chrono::milliseconds server_timeout = std::chrono::milliseconds(500))
+    std::chrono::milliseconds server_timeout = std::chrono::milliseconds(500),
+    const rcl_action_server_options_t & options = rcl_action_server_get_default_options(),
+    rclcpp::CallbackGroup::SharedPtr group = nullptr)
   : node_base_interface_(node_base_interface),
     node_clock_interface_(node_clock_interface),
     node_logging_interface_(node_logging_interface),
@@ -103,7 +112,9 @@ public:
       action_name_,
       std::bind(&SimpleActionServer::handle_goal, this, _1, _2),
       std::bind(&SimpleActionServer::handle_cancel, this, _1),
-      std::bind(&SimpleActionServer::handle_accepted, this, _1));
+      std::bind(&SimpleActionServer::handle_accepted, this, _1),
+      options,
+      group);
   }
 
   /**
