@@ -21,11 +21,10 @@
 #include <queue>
 #include <limits>
 #include <string>
+#include <fstream>
 
 #include "ompl/base/ScopedState.h"
 #include "ompl/base/spaces/DubinsStateSpace.h"
-#include "ompl/base/spaces/ReedsSheppStateSpace.h"
-
 #include "nav2_smac_planner/node_lattice.hpp"
 
 using namespace std::chrono;  // NOLINT
@@ -59,29 +58,102 @@ void LatticeMotionTable::initMotionModel(
   reverse_penalty = search_info.reverse_penalty;
   current_lattice_filepath = search_info.lattice_filepath;
 
-  // TODO(Matt) read in file, precompute based on orientation bins for lookup at runtime
-  // file is `search_info.lattice_filepath`, to be read in from plugin and provided here.
+  latticeMetadata = getLatticeMetadata(current_lattice_filepath);
 
-  // TODO(Matt) create a state_space with the max turning rad primitive within the file
-  // (or another -- mid?)
-  // to use for analytic expansions and heuristic generation. Potentially make both an
-  // extreme and a passive one?
+  std::ifstream latticeFile(current_lattice_filepath);
 
-  // TODO(Matt) populate num_angle_quantization, size_x, min_turning_radius, trig_values,
-  // all of the member variables of LatticeMotionTable
+  if( !latticeFile.is_open() )
+  {
+    throw std::runtime_error("Could not open lattice file");
+  }
+
+  nlohmann::json j;
+  latticeFile >> j;
+
+  float prevStartAngle = 0; 
+  std::vector<MotionPrimitive> primitives; 
+  nlohmann::json jsonPrimitives = j["primitives"];
+  for(unsigned int i = 0; i < jsonPrimitives.size(); ++i)
+  {
+    MotionPrimitive newPrimitive; 
+    fromJsonToMotionPrimitive(jsonPrimitives[i], newPrimitive); 
+
+    if(prevStartAngle != newPrimitive.start_angle )
+    {
+      motionPrimitives.emplace_back(primitives);
+      primitives.clear(); 
+      prevStartAngle = newPrimitive.start_angle;
+    }
+    primitives.emplace_back(newPrimitive); 
+  }
+  motionPrimitives.emplace_back(primitives); 
+
+  num_angle_quantization = latticeMetadata.number_of_headings;
+  num_angle_quantization_float = static_cast<float>(num_angle_quantization);
+  min_turning_radius = latticeMetadata.min_turning_radius;
+
+  //TODO: Note sure what type of state space this should be 
+  state_space = std::make_unique<ompl::base::DubinsStateSpace>( min_turning_radius );
+
+  for(unsigned int i = 0; i < motionPrimitives.size(); ++i)
+  {
+    for(unsigned int j = 0; j < motionPrimitives[0].size(); ++j)
+    {
+      //TODO: angles in json file need to be converted to radians
+      primitive_headings.emplace_back( motionPrimitives[i][j].start_angle );
+    }
+  }
+
+  //TODO: angles in json file need to be converted to radians
+  for(unsigned int i = 0; i < primitive_headings.size(); ++i)
+  {
+    trig_values.emplace_back( 
+      cos(primitive_headings[i]), 
+      sin(primitive_headings[i]) );
+  } 
 }
 
-MotionPoses LatticeMotionTable::getProjections(const NodeLattice * node)
+MotionPoses LatticeMotionTable::getMotionPrimitives(const NodeLattice * node)
 {
-  return MotionPoses();  // TODO(Matt) lookup at run time the primitives to use at node
+  //Question: Theta is in bin coords, 0-16 so theta does not have to be shifted?
+  const float node_heading = node->pose.theta; 
+  const unsigned int branches = motionPrimitives[node_heading].size();
+  MotionPoses primitive_projection_list; 
+  primitive_projection_list.reserve( branches );
+
+  for( unsigned int i = 0; i < branches; ++i)
+  {
+    const MotionPose end_pose = motionPrimitives[node_heading][i].poses.back(); 
+
+    primitive_projection_list.emplace_back( 
+      node->pose.x + end_pose._x, //Question: does this need to be converted to cells
+      node->pose.y + end_pose._y, //Question: does this need to be converted to cells
+      end_pose._theta); //Question: does this need to be converted to bins?
+  }
+
+  //Question: we will likely want to know the motion primitive index (0-104)
+  //That the lattice node will store for the backtrace 
+
+  return primitive_projection_list;
 }
 
 LatticeMetadata LatticeMotionTable::getLatticeMetadata(const std::string & lattice_filepath)
 {
-  // TODO(Matt) from this file extract and return the number of angle bins and
-  // turning radius in global coordinates, respectively.
-  // world coordinates meaning meters, not cells
-  return {0 /*num bins*/, 0 /*turning rad*/};
+  //NOTE: This seems redundant 
+  std::ifstream latticeFile(lattice_filepath);
+
+  if( !latticeFile.is_open() )
+  {
+    throw std::runtime_error("Could not open lattice file");
+  }
+
+  nlohmann::json j;
+  latticeFile >> j;
+  LatticeMetadata metadata;
+
+  fromJsonToMetaData(j["latticeMetadata"], metadata);
+
+  return metadata;
 }
 
 NodeLattice::NodeLattice(const unsigned int index)
@@ -116,11 +188,13 @@ bool NodeLattice::isNodeValid(
 {
   // TODO(steve) if primitive longer than 1.5 cells, then we need to split into 1 cell
   // increments and collision check across them
-  if (collision_checker->inCollision(
-      this->pose.x, this->pose.y, this->pose.theta * motion_table.bin_size, traverse_unknown))
-  {
-    return false;
-  }
+
+  //TODO: removed bin size from motion table, not sutible for lattice planner
+  // if (collision_checker->inCollision(
+  //     this->pose.x, this->pose.y, this->pose.theta * motion_table.bin_size, traverse_unknown))
+  // {
+  //   return false;
+  // }
 
   _cell_cost = collision_checker->getCost();
   return true;
@@ -234,7 +308,7 @@ void NodeLattice::getNeighbors(
   unsigned int index = 0;
   NodePtr neighbor = nullptr;
   Coordinates initial_node_coords;
-  const MotionPoses motion_projections = motion_table.getProjections(this);
+  const MotionPoses motion_projections = motion_table.getMotionPrimitives(this);
 
   for (unsigned int i = 0; i != motion_projections.size(); i++) {
     index = NodeLattice::getIndex(
