@@ -43,6 +43,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <omp.h>
 
 #include "nav2_costmap_2d/footprint.hpp"
 
@@ -145,40 +146,55 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   minx_ = miny_ = std::numeric_limits<double>::max();
   maxx_ = maxy_ = std::numeric_limits<double>::lowest();
 
-  for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin();
-    plugin != plugins_.end(); ++plugin)
+  int n_cores = omp_get_num_procs();
+  int n_plugin_threads = std::max(std::min((int)plugins_.size(), n_cores), 1);
+  int n_filter_threads = std::max(std::min((int)filters_.size(), n_cores), 1);
+
+  #pragma omp parallel reduction(min:minx_) reduction(min: miny_) \
+  reduction(max: maxx_) reduction(max: maxy_) num_threads(n_plugin_threads)
   {
-    double prev_minx = minx_;
-    double prev_miny = miny_;
-    double prev_maxx = maxx_;
-    double prev_maxy = maxy_;
-    (*plugin)->updateBounds(robot_x, robot_y, robot_yaw, &minx_, &miny_, &maxx_, &maxy_);
-    if (minx_ > prev_minx || miny_ > prev_miny || maxx_ < prev_maxx || maxy_ < prev_maxy) {
-      RCLCPP_WARN(
-        rclcpp::get_logger(
-          "nav2_costmap_2d"), "Illegal bounds change, was [tl: (%f, %f), br: (%f, %f)], but "
-        "is now [tl: (%f, %f), br: (%f, %f)]. The offending layer is %s",
-        prev_minx, prev_miny, prev_maxx, prev_maxy,
-        minx_, miny_, maxx_, maxy_,
-        (*plugin)->getName().c_str());
+  #pragma omp for nowait schedule(auto)
+    for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin();
+      plugin != plugins_.end(); ++plugin)
+    {
+      double prev_minx = minx_;
+      double prev_miny = miny_;
+      double prev_maxx = maxx_;
+      double prev_maxy = maxy_;
+      (*plugin)->updateBounds(robot_x, robot_y, robot_yaw, &minx_, &miny_, &maxx_, &maxy_);
+      if (minx_ > prev_minx || miny_ > prev_miny || maxx_ < prev_maxx || maxy_ < prev_maxy) {
+        RCLCPP_WARN(
+          rclcpp::get_logger(
+            "nav2_costmap_2d"), "Illegal bounds change, was [tl: (%f, %f), br: (%f, %f)], but "
+          "is now [tl: (%f, %f), br: (%f, %f)]. The offending layer is %s",
+          prev_minx, prev_miny, prev_maxx, prev_maxy,
+          minx_, miny_, maxx_, maxy_,
+          (*plugin)->getName().c_str());
+      }
     }
   }
-  for (vector<std::shared_ptr<Layer>>::iterator filter = filters_.begin();
-    filter != filters_.end(); ++filter)
+
+  #pragma omp parallel reduction(min:minx_) reduction(min: miny_) \
+  reduction(max: maxx_) reduction(max: maxy_) num_threads(n_filter_threads)
   {
-    double prev_minx = minx_;
-    double prev_miny = miny_;
-    double prev_maxx = maxx_;
-    double prev_maxy = maxy_;
-    (*filter)->updateBounds(robot_x, robot_y, robot_yaw, &minx_, &miny_, &maxx_, &maxy_);
-    if (minx_ > prev_minx || miny_ > prev_miny || maxx_ < prev_maxx || maxy_ < prev_maxy) {
-      RCLCPP_WARN(
-        rclcpp::get_logger(
-          "nav2_costmap_2d"), "Illegal bounds change, was [tl: (%f, %f), br: (%f, %f)], but "
-        "is now [tl: (%f, %f), br: (%f, %f)]. The offending filter is %s",
-        prev_minx, prev_miny, prev_maxx, prev_maxy,
-        minx_, miny_, maxx_, maxy_,
-        (*filter)->getName().c_str());
+  #pragma omp for nowait schedule(auto)
+    for (vector<std::shared_ptr<Layer>>::iterator filter = filters_.begin();
+      filter != filters_.end(); ++filter)
+    {
+      double prev_minx = minx_;
+      double prev_miny = miny_;
+      double prev_maxx = maxx_;
+      double prev_maxy = maxy_;
+      (*filter)->updateBounds(robot_x, robot_y, robot_yaw, &minx_, &miny_, &maxx_, &maxy_);
+      if (minx_ > prev_minx || miny_ > prev_miny || maxx_ < prev_maxx || maxy_ < prev_maxy) {
+        RCLCPP_WARN(
+          rclcpp::get_logger(
+            "nav2_costmap_2d"), "Illegal bounds change, was [tl: (%f, %f), br: (%f, %f)], but "
+          "is now [tl: (%f, %f), br: (%f, %f)]. The offending filter is %s",
+          prev_minx, prev_miny, prev_maxx, prev_maxy,
+          minx_, miny_, maxx_, maxy_,
+          (*filter)->getName().c_str());
+      }
     }
   }
 
