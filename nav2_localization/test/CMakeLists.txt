@@ -1,0 +1,11 @@
+ament_add_gtest(test_sample_diff_drive_odom_motion_model
+  plugins/sample_motion_models/test_diff_drive_odom_motion_model.cpp
+)
+
+ament_target_dependencies(test_sample_diff_drive_odom_motion_model
+  ${dependencies}
+)
+
+target_link_libraries(test_sample_diff_drive_odom_motion_model
+  sample_motion_model
+)
