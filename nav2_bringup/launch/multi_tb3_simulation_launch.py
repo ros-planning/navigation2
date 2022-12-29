@@ -25,7 +25,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, ExecuteProcess, GroupAction,
+from launch.actions import (DeclareLaunchArgument, GroupAction,
                             IncludeLaunchDescription, LogInfo)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -36,17 +36,18 @@ def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_bringup')
     launch_dir = os.path.join(bringup_dir, 'launch')
+    aws_dir = get_package_share_directory('aws_robomaker_small_warehouse_world')
+    gazebo_ros = get_package_share_directory('gazebo_ros')
 
     # Names and poses of the robots
     robots = [
-        {'name': 'robot1', 'x_pose': 0.0, 'y_pose': 0.5, 'z_pose': 0.01,
+        {'name': 'robot1', 'x_pose': 1.80, 'y_pose': 2.20, 'z_pose': 0.01,
                            'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0},
-        {'name': 'robot2', 'x_pose': 0.0, 'y_pose': -0.5, 'z_pose': 0.01,
+        {'name': 'robot2', 'x_pose': -3.50, 'y_pose': 9.0, 'z_pose': 0.01,
                            'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0}]
 
     # Simulation settings
     world = LaunchConfiguration('world')
-    simulator = LaunchConfiguration('simulator')
 
     # On this example all robots are launched with the same settings
     map_yaml_file = LaunchConfiguration('map')
@@ -60,17 +61,13 @@ def generate_launch_description():
     # Declare the launch arguments
     declare_world_cmd = DeclareLaunchArgument(
         'world',
-        default_value=os.path.join(bringup_dir, 'worlds', 'world_only.model'),
+        default_value=os.path.join(aws_dir, 'worlds', 'no_roof_small_warehouse',
+                                   'no_roof_small_warehouse.world'),
         description='Full path to world file to load')
-
-    declare_simulator_cmd = DeclareLaunchArgument(
-        'simulator',
-        default_value='gazebo',
-        description='The simulator to use (gazebo or gzserver)')
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map',
-        default_value=os.path.join(bringup_dir, 'maps', 'turtlebot3_world.yaml'),
+        default_value=os.path.join(aws_dir, 'maps', '005', 'map.yaml'),
         description='Full path to map file to load')
 
     declare_robot1_params_file_cmd = DeclareLaunchArgument(
@@ -103,10 +100,11 @@ def generate_launch_description():
         description='Whether to start RVIZ')
 
     # Start Gazebo with plugin providing the robot spawning service
-    start_gazebo_cmd = ExecuteProcess(
-        cmd=[simulator, '--verbose', '-s', 'libgazebo_ros_init.so',
-                                     '-s', 'libgazebo_ros_factory.so', world],
-        output='screen')
+    start_gazebo_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(gazebo_ros, 'launch', 'gzserver.launch.py')),
+        launch_arguments={'world': world}.items()
+    )
 
     # Define commands for launching the navigation instances
     nav_instances_cmds = []
@@ -170,7 +168,6 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     # Declare the launch options
-    ld.add_action(declare_simulator_cmd)
     ld.add_action(declare_world_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_robot1_params_file_cmd)

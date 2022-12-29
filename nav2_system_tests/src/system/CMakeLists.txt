@@ -5,9 +5,6 @@ ament_add_test(test_bt_navigator
   TIMEOUT 180
   ENV
     TEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-    TEST_MAP=${PROJECT_SOURCE_DIR}/maps/map_circular.yaml
-    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/turtlebot3_ros2_demo.world
-    GAZEBO_MODEL_PATH=${PROJECT_SOURCE_DIR}/models
     BT_NAVIGATOR_XML=navigate_to_pose_w_replanning_and_recovery.xml
     TESTER=nav_to_pose_tester_node.py
     ASTAR=True
@@ -22,9 +19,6 @@ ament_add_test(test_bt_navigator_with_wrong_init_pose
   TIMEOUT 180
   ENV
     TEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-    TEST_MAP=${PROJECT_SOURCE_DIR}/maps/map_circular.yaml
-    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/turtlebot3_ros2_demo.world
-    GAZEBO_MODEL_PATH=${PROJECT_SOURCE_DIR}/models
     BT_NAVIGATOR_XML=navigate_to_pose_w_replanning_and_recovery.xml
     TESTER=nav_to_pose_tester_node.py
     ASTAR=True
@@ -39,9 +33,6 @@ ament_add_test(test_bt_navigator_with_dijkstra
   TIMEOUT 180
   ENV
     TEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-    TEST_MAP=${PROJECT_SOURCE_DIR}/maps/map_circular.yaml
-    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/turtlebot3_ros2_demo.world
-    GAZEBO_MODEL_PATH=${PROJECT_SOURCE_DIR}/models
     BT_NAVIGATOR_XML=navigate_to_pose_w_replanning_and_recovery.xml
     TESTER=nav_to_pose_tester_node.py
     ASTAR=False
@@ -56,9 +47,6 @@ ament_add_test(test_bt_navigator_2
   TIMEOUT 180
   ENV
     TEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-    TEST_MAP=${PROJECT_SOURCE_DIR}/maps/map_circular.yaml
-    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/turtlebot3_ros2_demo.world
-    GAZEBO_MODEL_PATH=${PROJECT_SOURCE_DIR}/models
     BT_NAVIGATOR_XML=navigate_to_pose_w_replanning_and_recovery.xml
     TESTER=nav_to_pose_tester_node.py
     ASTAR=False
@@ -73,9 +61,7 @@ ament_add_test(test_dynamic_obstacle
   TIMEOUT 180
   ENV
     TEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-    TEST_MAP=${PROJECT_SOURCE_DIR}/maps/map_circular.yaml
-    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/turtlebot3_ros2_demo_obstacle.world
-    GAZEBO_MODEL_PATH=${PROJECT_SOURCE_DIR}/models
+    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/no_roof_small_warehouse_with_obstacle.world
     BT_NAVIGATOR_XML=navigate_to_pose_w_replanning_and_recovery.xml
     TESTER=nav_to_pose_tester_node.py
     ASTAR=False
@@ -90,9 +76,6 @@ ament_add_test(test_nav_through_poses
   TIMEOUT 180
   ENV
     TEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-    TEST_MAP=${PROJECT_SOURCE_DIR}/maps/map_circular.yaml
-    TEST_WORLD=${PROJECT_SOURCE_DIR}/worlds/turtlebot3_ros2_demo_obstacle.world
-    GAZEBO_MODEL_PATH=${PROJECT_SOURCE_DIR}/models
     BT_NAVIGATOR_XML=navigate_through_poses_w_replanning_and_recovery.xml
     TESTER=nav_through_poses_tester_node.py
     ASTAR=False

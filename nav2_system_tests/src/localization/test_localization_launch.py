@@ -17,50 +17,112 @@
 import os
 import sys
 
+from os import environ
+from os import pathsep
+
+from ament_index_python.packages import get_package_share_directory
+
 from launch import LaunchDescription
 from launch import LaunchService
-import launch.actions
-from launch.actions import ExecuteProcess
-import launch_ros.actions
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
 from launch_testing.legacy import LaunchTestService
+
+from scripts import GazeboRosPaths
 
 
 def main(argv=sys.argv[1:]):
-    mapFile = os.getenv('TEST_MAP')
-    testExecutable = os.getenv('TEST_EXECUTABLE')
-    world = os.getenv('TEST_WORLD')
+    model, plugin, media = GazeboRosPaths.get_paths()
 
-    launch_gazebo = launch.actions.ExecuteProcess(
-        cmd=['gzserver', '-s', 'libgazebo_ros_init.so', '--minimal_comms', world],
-        output='screen')
-    link_footprint = launch_ros.actions.Node(
+    if 'GAZEBO_MODEL_PATH' in environ:
+        model += pathsep+environ['GAZEBO_MODEL_PATH']
+    if 'GAZEBO_PLUGIN_PATH' in environ:
+        plugin += pathsep+environ['GAZEBO_PLUGIN_PATH']
+    if 'GAZEBO_RESOURCE_PATH' in environ:
+        media += pathsep+environ['GAZEBO_RESOURCE_PATH']
+
+    aws_dir = get_package_share_directory('aws_robomaker_small_warehouse_world')
+
+    env = {'GAZEBO_MODEL_PATH': model,
+           'GAZEBO_PLUGIN_PATH': plugin,
+           'GAZEBO_RESOURCE_PATH': media}
+
+    bringup_dir = get_package_share_directory('nav2_bringup')
+    mapFile = os.path.join(aws_dir, 'maps', '005', 'map.yaml')
+    testExecutable = os.getenv('TEST_EXECUTABLE')
+
+    world = LaunchConfiguration('world')
+    robot_name = LaunchConfiguration('robot_name')
+    robot_sdf = LaunchConfiguration('robot_sdf')
+    pose = {'x': LaunchConfiguration('x_pose', default='1.80'),
+            'y': LaunchConfiguration('y_pose', default='2.20'),
+            'z': LaunchConfiguration('z_pose', default='0.01'),
+            'R': LaunchConfiguration('roll', default='0.00'),
+            'P': LaunchConfiguration('pitch', default='0.00'),
+            'Y': LaunchConfiguration('yaw', default='0.00')}
+
+    declare_robot_sdf_cmd = DeclareLaunchArgument(
+        'robot_sdf',
+        default_value=os.path.join(bringup_dir, 'worlds', 'waffle.model'),
+        description='Full path to robot sdf file to spawn the robot in gazebo')
+
+    declare_world_cmd = DeclareLaunchArgument(
+        'world',
+        default_value=os.path.join(aws_dir, 'worlds', 'no_roof_small_warehouse',
+                                   'no_roof_small_warehouse.world'),
+        description='Full path to world model file to load')
+
+    declare_robot_name_cmd = DeclareLaunchArgument(
+        'robot_name',
+        default_value='turtlebot3_waffle',
+        description='name of the robot')
+
+    launch_gazebo = ExecuteProcess(
+        cmd=['gzserver', '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so',
+             '--minimal_comms', world],
+        additional_env=env,
+        cwd=[aws_dir], output='screen')
+
+    run_gazebo_spawner = Node(
+        package='gazebo_ros',
+        executable='spawn_entity.py',
+        output='screen',
+        arguments=[
+            '-entity', robot_name,
+            '-file', robot_sdf,
+            '-robot_namespace', '',
+            '-x', pose['x'], '-y', pose['y'], '-z', pose['z'],
+            '-R', pose['R'], '-P', pose['P'], '-Y', pose['Y']])
+    link_footprint = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
         arguments=['0', '0', '0', '0', '0', '0', 'base_footprint', 'base_link'])
-    footprint_scan = launch_ros.actions.Node(
+    footprint_scan = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
         arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_scan'])
-    run_map_server = launch_ros.actions.Node(
+    run_map_server = Node(
         package='nav2_map_server',
         executable='map_server',
         name='map_server',
         output='screen',
         parameters=[{'yaml_filename': mapFile}])
-    run_amcl = launch_ros.actions.Node(
+    run_amcl = Node(
         package='nav2_amcl',
         executable='amcl',
         output='screen')
-    run_lifecycle_manager = launch_ros.actions.Node(
+    run_lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager',
         output='screen',
         parameters=[{'node_names': ['map_server', 'amcl']}, {'autostart': True}])
-    ld = LaunchDescription([launch_gazebo, link_footprint, footprint_scan,
-                            run_map_server, run_amcl, run_lifecycle_manager])
+    ld = LaunchDescription([declare_world_cmd, declare_robot_name_cmd, declare_robot_sdf_cmd,
+                            run_gazebo_spawner, launch_gazebo, link_footprint,
+                            footprint_scan, run_map_server, run_amcl, run_lifecycle_manager])
 
     test1_action = ExecuteProcess(
         cmd=[testExecutable],

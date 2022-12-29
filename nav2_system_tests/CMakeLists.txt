@@ -104,6 +104,7 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
+  find_package(aws_robomaker_small_warehouse_world REQUIRED)
 
   add_subdirectory(src/behavior_tree)
   add_subdirectory(src/planning)

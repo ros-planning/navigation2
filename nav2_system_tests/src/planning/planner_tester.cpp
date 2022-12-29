@@ -22,12 +22,15 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
 
 #include "planner_tester.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav2_map_server/map_mode.hpp"
 #include "nav2_map_server/map_io.hpp"
 #include "nav2_msgs/msg/costmap_meta_data.hpp"
+
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 using namespace std::chrono_literals;
 using namespace std::chrono;  // NOLINT
@@ -162,23 +165,22 @@ void PlannerTester::loadDefaultMap()
 
   nav2_map_server::MapMode mode = nav2_map_server::MapMode::Trinary;
 
-  std::string file_path = "";
-  char const * path = getenv("TEST_MAP");
-  if (path == NULL) {
+  std::string aws_dir = ament_index_cpp::get_package_share_directory(
+    "aws_robomaker_small_warehouse_world");
+  auto file_path = std::filesystem::path(aws_dir + "/maps/005/map_rotated.png");
+  if (file_path.empty()) {
     throw std::runtime_error(
             "Path to map image file"
-            " has not been specified in environment variable `TEST_MAP`.");
-  } else {
-    file_path = std::string(path);
+            " has not been set correctly.");
   }
 
-  RCLCPP_INFO(this->get_logger(), "Loading map with file_path: %s", file_path.c_str());
+  RCLCPP_INFO(this->get_logger(), "Loading map with file_path: %s", file_path.string().c_str());
 
   try {
     map_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
 
     nav2_map_server::LoadParameters load_parameters;
-    load_parameters.image_file_name = file_path;
+    load_parameters.image_file_name = file_path.string();
     load_parameters.resolution = resolution;
     load_parameters.origin = origin;
     load_parameters.free_thresh = free_threshold;
@@ -189,7 +191,7 @@ void PlannerTester::loadDefaultMap()
   } catch (...) {
     RCLCPP_ERROR(
       this->get_logger(),
-      "Failed to load image from file: %s", file_path.c_str());
+      "Failed to load image from file: %s", file_path.string().c_str());
     throw;
   }
 
