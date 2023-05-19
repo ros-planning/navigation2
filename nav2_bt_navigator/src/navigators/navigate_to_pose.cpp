@@ -66,7 +66,7 @@ NavigateToPoseNavigator::getDefaultBTFilepath(
     node->declare_parameter<std::string>(
       "default_nav_to_pose_bt_xml",
       pkg_share_dir +
-      "/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml");
+      "/behavior_trees/navigate_w_recovery_and_replanning_only_if_path_becomes_invalid.xml");
   }
 
   node->get_parameter("default_nav_to_pose_bt_xml", default_bt_xml_filename);
@@ -123,8 +123,8 @@ NavigateToPoseNavigator::onLoop()
 
   try {
     // Get current path points
-    nav_msgs::msg::Path current_path;
-    blackboard->get<nav_msgs::msg::Path>(path_blackboard_id_, current_path);
+    nav2_msgs::msg::PathWithCost current_path;
+    blackboard->get<nav2_msgs::msg::PathWithCost>(path_blackboard_id_, current_path);
 
     // Find the closest pose to current pose on global path
     auto find_closest_pose_idx =

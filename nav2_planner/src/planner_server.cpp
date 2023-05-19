@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <numeric>
 
 #include "builtin_interfaces/msg/duration.hpp"
 #include "lifecycle_msgs/msg/state.hpp"
@@ -52,6 +53,12 @@ PlannerServer::PlannerServer(const rclcpp::NodeOptions & options)
   // Declare this node's parameters
   declare_parameter("planner_plugins", default_ids_);
   declare_parameter("expected_planner_frequency", 1.0);
+
+  nav2_util::declare_parameter_if_not_declared(
+    this, "cost_change_z_score", rclcpp::ParameterValue(2.55));
+
+
+  get_parameter("cost_change_z_score", cost_change_z_score_);
 
   get_parameter("planner_plugins", planner_ids_);
   if (planner_ids_ == default_ids_) {
@@ -137,7 +144,7 @@ PlannerServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
   }
 
   // Initialize pubs & subs
-  plan_publisher_ = create_publisher<nav_msgs::msg::Path>("plan", 1);
+  plan_publisher_ = create_publisher<nav2_msgs::msg::PathWithCost>("plan", 1);
 
   // Create the action servers for path planning to a pose and through poses
   action_server_pose_ = std::make_unique<ActionServerToPose>(
@@ -339,7 +346,7 @@ bool PlannerServer::transformPosesToGlobalFrame(
 template<typename T>
 bool PlannerServer::validatePath(
   const geometry_msgs::msg::PoseStamped & goal,
-  const nav_msgs::msg::Path & path,
+  const nav2_msgs::msg::PathWithCost & path,
   const std::string & planner_id)
 {
   if (path.poses.empty()) {
@@ -368,7 +375,7 @@ void PlannerServer::computePlanThroughPoses()
   // Initialize the ComputePathThroughPoses goal and result
   auto goal = action_server_poses_->get_current_goal();
   auto result = std::make_shared<ActionThroughPoses::Result>();
-  nav_msgs::msg::Path concat_path;
+  nav2_msgs::msg::PathWithCost concat_path;
 
   geometry_msgs::msg::PoseStamped curr_start, curr_goal;
 
@@ -407,7 +414,7 @@ void PlannerServer::computePlanThroughPoses()
       }
 
       // Get plan from start -> goal
-      nav_msgs::msg::Path curr_path = getPlan(curr_start, curr_goal, goal->planner_id);
+      nav2_msgs::msg::PathWithCost curr_path = getPlan(curr_start, curr_goal, goal->planner_id);
 
       if (!validatePath<ActionThroughPoses>(curr_goal, curr_path, goal->planner_id)) {
         throw nav2_core::NoValidPathCouldBeFound(goal->planner_id + " generated a empty path");
@@ -568,7 +575,7 @@ PlannerServer::computePlan()
   }
 }
 
-nav_msgs::msg::Path
+nav2_msgs::msg::PathWithCost
 PlannerServer::getPlan(
   const geometry_msgs::msg::PoseStamped & start,
   const geometry_msgs::msg::PoseStamped & goal,
@@ -597,13 +604,13 @@ PlannerServer::getPlan(
     }
   }
 
-  return nav_msgs::msg::Path();
+  return nav2_msgs::msg::PathWithCost();
 }
 
 void
-PlannerServer::publishPlan(const nav_msgs::msg::Path & path)
+PlannerServer::publishPlan(const nav2_msgs::msg::PathWithCost & path)
 {
-  auto msg = std::make_unique<nav_msgs::msg::Path>(path);
+  auto msg = std::make_unique<nav2_msgs::msg::PathWithCost>(path);
   if (plan_publisher_->is_activated() && plan_publisher_->get_subscription_count() > 0) {
     plan_publisher_->publish(std::move(msg));
   }
@@ -620,13 +627,18 @@ void PlannerServer::isPathValid(
     return;
   }
 
+  RCLCPP_INFO_STREAM(get_logger(), "Path and cost" << request->path.poses.size() << " " <<
+  request->path.costs.size());
+
+  // Find the closest point to the robot to evaluate from
+  // TODO add orientation element like `truncate_path_local_action` BT node for looping paths
   geometry_msgs::msg::PoseStamped current_pose;
   unsigned int closest_point_index = 0;
   if (costmap_ros_->getRobotPose(current_pose)) {
     float current_distance = std::numeric_limits<float>::max();
     float closest_distance = current_distance;
     geometry_msgs::msg::Point current_point = current_pose.pose.position;
-    for (unsigned int i = 0; i < request->path.poses.size(); ++i) {
+    for (unsigned int i = 0; i != request->path.poses.size(); ++i) {
       geometry_msgs::msg::Point path_point = request->path.poses[i].pose.position;
 
       current_distance = nav2_util::geometry_utils::euclidean_distance(
@@ -638,25 +650,67 @@ void PlannerServer::isPathValid(
         closest_distance = current_distance;
       }
     }
+  }
 
-    /**
-     * The lethal check starts at the closest point to avoid points that have already been passed
-     * and may have become occupied
-     */
-    unsigned int mx = 0;
-    unsigned int my = 0;
-    for (unsigned int i = closest_point_index; i < request->path.poses.size(); ++i) {
-      costmap_->worldToMap(
-        request->path.poses[i].pose.position.x,
-        request->path.poses[i].pose.position.y, mx, my);
-      unsigned int cost = costmap_->getCost(mx, my);
+  // Checking path for collisions starting at the closest point to avoid those already passed
+  std::vector<unsigned int> current_costs;
+  current_costs.reserve(request->path.costs.size() - closest_point_index - 1);
 
-      if (cost == nav2_costmap_2d::LETHAL_OBSTACLE ||
-        cost == nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
-      {
-        response->is_valid = false;
-      }
+  unsigned int mx = 0;
+  unsigned int my = 0;
+  for (unsigned int i = closest_point_index; i != request->path.poses.size(); ++i) {
+    costmap_->worldToMap(
+      request->path.poses[i].pose.position.x,
+      request->path.poses[i].pose.position.y, mx, my);
+    unsigned int cost = costmap_->getCost(mx, my);
+    current_costs.push_back(cost);
+
+    if (cost == nav2_costmap_2d::LETHAL_OBSTACLE ||
+      cost == nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
+    {
+      response->is_valid = false;
+      return;
     }
+  }
+
+  // Check using a statistical test if the cost changes are 'significant' enough
+  // to warrant replanning, due to changes in cost within the environment,
+  // when larger than the minimum sample size for the test
+  if (!request->consider_cost_change || request->path.costs.size() < 30) {
+    return;
+  }
+
+  std::vector<unsigned int> original_costs(
+    request->path.costs.begin() + closest_point_index, request->path.costs.end());
+
+  float mean_orginal = 0;
+  float mean_current = 0;
+  for (unsigned int i = 0; i != original_costs.size(); ++i) {
+    mean_orginal += static_cast<float>(original_costs[i]);
+    mean_current += static_cast<float>(current_costs[i]);
+  }
+  mean_orginal /= static_cast<float>(original_costs.size());
+  mean_current /= static_cast<float>(current_costs.size());
+
+  float var_orginal = 0;
+  float var_current = 0;
+  for (unsigned int i = 0; i != original_costs.size(); ++i) {
+    var_orginal += std::pow(static_cast<float>(original_costs[i]) - static_cast<float>(mean_orginal), 2);
+    var_current += std::pow(static_cast<float>(current_costs[i]) - static_cast<float>(mean_current), 2);
+  }
+  var_orginal /= static_cast<float>(original_costs.size() - 1);
+  var_current /= static_cast<float>(current_costs.size() - 1);
+
+  // Conduct a two sample Z-test, with the null hypothesis is that both path cost samples
+  // come from the same distribution (e.g. there is not a statistically significant change)
+  // Thus, the difference in population mean is 0 and the sample sizes are the same
+  float z = (mean_current - mean_orginal) / std::sqrt((var_current + var_orginal) / current_costs.size());
+
+  // TODO try single tail or tune strictness? Parameterize?
+  // 1.65 95% single tail; 2.55 for 99% dual, 2.33 99% single; 90% 1.65 dual, 90% 1.2 single.
+  if (z > cost_change_z_score_) {  // critical z score for 95% level
+    RCLCPP_DEBUG_STREAM(get_logger(), "Z-test triggered new global plan. The z score was: " << z << "and the threshold was" << cost_change_z_score_);
+    response->is_valid = false;
   }
 }
 

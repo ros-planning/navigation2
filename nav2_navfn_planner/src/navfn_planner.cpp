@@ -127,7 +127,7 @@ NavfnPlanner::cleanup()
   planner_.reset();
 }
 
-nav_msgs::msg::Path NavfnPlanner::createPlan(
+nav2_msgs::msg::PathWithCost NavfnPlanner::createPlan(
   const geometry_msgs::msg::PoseStamped & start,
   const geometry_msgs::msg::PoseStamped & goal)
 {
@@ -166,7 +166,7 @@ nav_msgs::msg::Path NavfnPlanner::createPlan(
       costmap_->getSizeInCellsY());
   }
 
-  nav_msgs::msg::Path path;
+  nav2_msgs::msg::PathWithCost path;
 
   // Corner case of the start(x,y) = goal(x,y)
   if (start.pose.position.x == goal.pose.position.x &&
@@ -185,6 +185,7 @@ nav_msgs::msg::Path NavfnPlanner::createPlan(
     if (start.pose.orientation != goal.pose.orientation && !use_final_approach_orientation_) {
       pose.pose.orientation = goal.pose.orientation;
     }
+    path.costs.push_back(costmap_->getCost(mx_start, my_start));
     path.poses.push_back(pose);
     return path;
   }
@@ -192,6 +193,23 @@ nav_msgs::msg::Path NavfnPlanner::createPlan(
   if (!makePlan(start.pose, goal.pose, tolerance_, path)) {
     throw nav2_core::NoValidPathCouldBeFound(
             "Failed to create plan with tolerance of: " + std::to_string(tolerance_) );
+  }
+
+  for ([[maybe_unused]] const auto & pose : path.poses) {
+    unsigned int mx, my;
+    costmap_->worldToMap(pose.pose.position.x, pose.pose.position.y, mx, my);
+    auto cost = costmap_->getCost(mx, my);
+    path.costs.push_back(cost);
+//    if ([[maybe_unused]] auto cost = costmap_->getCost(mx, my)) {
+//      path.costs.push_back(50);
+//    } else {
+//      path.costs.push_back(0);
+//    }
+  }
+
+  if (path.poses.size() != path.costs.size())
+  {
+    RCLCPP_INFO_STREAM(logger_, "Poses and costs do not match!");
   }
 
 
@@ -220,7 +238,7 @@ bool
 NavfnPlanner::makePlan(
   const geometry_msgs::msg::Pose & start,
   const geometry_msgs::msg::Pose & goal, double tolerance,
-  nav_msgs::msg::Path & plan)
+  nav2_msgs::msg::PathWithCost & plan)
 {
   // clear the plan, just in case
   plan.poses.clear();
@@ -354,7 +372,7 @@ NavfnPlanner::makePlan(
 void
 NavfnPlanner::smoothApproachToGoal(
   const geometry_msgs::msg::Pose & goal,
-  nav_msgs::msg::Path & plan)
+  nav2_msgs::msg::PathWithCost & plan)
 {
   // Replace the last pose of the computed path if it's actually further away
   // to the second to last pose than the goal pose.
@@ -377,7 +395,7 @@ NavfnPlanner::smoothApproachToGoal(
 bool
 NavfnPlanner::getPlanFromPotential(
   const geometry_msgs::msg::Pose & goal,
-  nav_msgs::msg::Path & plan)
+  nav2_msgs::msg::PathWithCost & plan)
 {
   // clear the plan, just in case
   plan.poses.clear();
