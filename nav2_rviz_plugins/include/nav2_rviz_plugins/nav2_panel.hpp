@@ -15,7 +15,9 @@
 #ifndef NAV2_RVIZ_PLUGINS__NAV2_PANEL_HPP_
 #define NAV2_RVIZ_PLUGINS__NAV2_PANEL_HPP_
 
+#include <QString>
 #include <QtWidgets>
+#include <QTableWidget>
 #include <QBasicTimer>
 #undef NO_ERROR
 
@@ -64,6 +66,7 @@ private Q_SLOTS:
   void startThread();
   void onStartup();
   void onShutdown();
+  void onInitial();
   void onCancel();
   void onPause();
   void onResume();
@@ -78,12 +81,12 @@ private Q_SLOTS:
   void initialStateHandler();
 
 private:
-  void loadLogFiles();
+  void initializeNavTable(QTableWidget * table);
   void onCancelButtonPressed();
   void timerEvent(QTimerEvent * event) override;
   bool isLoopValueValid(std::string & loop);
 
-  int unique_id {0};
+  int unique_id_ {0};
   int goal_index_ = 0;
   int loop_count_ = 0;
   bool store_initial_pose_ = false;
@@ -127,10 +130,14 @@ private:
     navigation_feedback_sub_;
   rclcpp::Subscription<nav2_msgs::action::NavigateThroughPoses::Impl::FeedbackMessage>::SharedPtr
     nav_through_poses_feedback_sub_;
+  rclcpp::Subscription<nav2_msgs::action::FollowWaypoints::Impl::FeedbackMessage>::SharedPtr
+    follow_waypoints_feedback_sub_;
   rclcpp::Subscription<nav2_msgs::action::NavigateToPose::Impl::GoalStatusMessage>::SharedPtr
     navigation_goal_status_sub_;
   rclcpp::Subscription<nav2_msgs::action::NavigateThroughPoses::Impl::GoalStatusMessage>::SharedPtr
     nav_through_poses_goal_status_sub_;
+  rclcpp::Subscription<nav2_msgs::action::FollowWaypoints::Impl::GoalStatusMessage>::SharedPtr
+    follow_waypoints_goal_status_sub_;
 
   // Tf's for initial pose
   std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
@@ -160,9 +167,10 @@ private:
   QLabel * navigation_status_indicator_{nullptr};
   QLabel * localization_status_indicator_{nullptr};
   QLabel * navigation_goal_status_indicator_{nullptr};
-  QLabel * navigation_feedback_indicator_{nullptr};
   QLabel * waypoint_status_indicator_{nullptr};
   QLabel * number_of_loops_{nullptr};
+
+  QTableWidget * navigation_data_table_{nullptr};
 
   QLineEdit * nr_of_loops_{nullptr};
 
@@ -182,16 +190,19 @@ private:
   QLabel * imgDisplayLabel_{nullptr};
 
   // The following states are added to allow for the state of the button to only expose reset
-  // while the NavigateToPoses action is not active. While running, the user will be allowed to
-  // cancel the action. The ROSActionTransition allows for the state of the action to be detected
+  // while neither the NavigateToPoses action nor FollowWaypoints are active. While running,
+  // the user will be allowed to cancel the action.
+  // The ROSActionTransition allows for the state of the action to be detected
   // and the button state to change automatically.
-  QState * running_{nullptr};
+  QState * running_nav_to_pose_{nullptr};
   QState * canceled_{nullptr};
   // The following states are added to allow to collect several poses to perform a waypoint-mode
   // navigation or navigate through poses mode.
   QState * accumulating_{nullptr};
-  QState * accumulated_wp_{nullptr};
-  QState * accumulated_nav_through_poses_{nullptr};
+  // This state occurs when FollowWaypoints action is in progress
+  QState * running_wp_{nullptr};
+  // This state occurs when NavigateThroughPoses action is in progress
+  QState * running_nav_through_poses_{nullptr};
 
   std::vector<geometry_msgs::msg::PoseStamped> acummulated_poses_;
   std::vector<geometry_msgs::msg::PoseStamped> store_poses_;
@@ -206,20 +217,40 @@ private:
 
   // create label string from goal status msg
   static inline QString getGoalStatusLabel(
-    int8_t status = action_msgs::msg::GoalStatus::STATUS_UNKNOWN);
+    const int8_t status = action_msgs::msg::GoalStatus::STATUS_UNKNOWN);
 
-  // create label string from feedback msg
-  static inline QString getNavToPoseFeedbackLabel(
-    nav2_msgs::action::NavigateToPose::Feedback msg =
-    nav2_msgs::action::NavigateToPose::Feedback());
-  static inline QString getNavThroughPosesFeedbackLabel(
-    nav2_msgs::action::NavigateThroughPoses::Feedback =
-    nav2_msgs::action::NavigateThroughPoses::Feedback());
+  // Render navigation to pose in the data table
+  static void renderNavToPoseFeedback(
+    QTableWidget * table,
+    const nav2_msgs::action::NavigateToPose::Feedback msg =
+    nav2_msgs::action::NavigateToPose::Feedback()
+  );
+
+  // Render navigation through poses in the data table
+  static void renderNavThroughPosesFeedback(
+    QTableWidget * table,
+    const nav2_msgs::action::NavigateThroughPoses::Feedback msg =
+    nav2_msgs::action::NavigateThroughPoses::Feedback()
+  );
+
+  // Render navigation to waypoints in the data table
+  static void renderNavThroughWPFeedback(
+    QTableWidget * table,
+    const nav2_msgs::action::FollowWaypoints::Feedback msg =
+    nav2_msgs::action::FollowWaypoints::Feedback()
+  );
+
+  // Render navigation loop count and goal index in the data table
+  static void renderWaypointLoopCount(
+    QTableWidget * table,
+    const int goal_index,
+    const int loop_count
+  );
+
+  // Render the common members of NavigateToPose::Feedback or
+  // NavigateThroughPoses::Feedback in a table
   template<typename T>
-  static inline std::string toLabel(T & msg);
-
-  // round off double to the specified precision and convert to string
-  static inline std::string toString(double val, int precision = 0);
+  static inline void renderNavGenericPoseFeedback(QTableWidget * table, const T & msg);
 
   // Waypoint navigation visual markers publisher
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr wp_navigation_markers_pub_;
