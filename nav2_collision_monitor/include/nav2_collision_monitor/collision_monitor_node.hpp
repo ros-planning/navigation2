@@ -47,12 +47,12 @@ class CollisionMonitor : public nav2_util::LifecycleNode
 {
 public:
   /**
-   * @brief Constructor for the nav2_collision_safery::CollisionMonitor
+   * @brief Constructor for the nav2_collision_monitor::CollisionMonitor
    * @param options Additional options to control creation of the node.
    */
   explicit CollisionMonitor(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
   /**
-   * @brief Destructor for the nav2_collision_safery::CollisionMonitor
+   * @brief Destructor for the nav2_collision_monitor::CollisionMonitor
    */
   ~CollisionMonitor();
 
@@ -126,7 +126,7 @@ protected:
    * @brief Supporting routine creating and configuring all data sources
    * @param base_frame_id Robot base frame ID
    * @param odom_frame_id Odometry frame ID. Used as global frame to get
-   * source->base time inerpolated transform.
+   * source->base time interpolated transform.
    * @param transform_tolerance Transform tolerance
    * @param source_timeout Maximum time interval in which data is considered valid
    * @param base_shift_correction Whether to correct source data towards to base frame movement,
@@ -147,14 +147,14 @@ protected:
   void process(const Velocity & cmd_vel_in);
 
   /**
-   * @brief Processes the polygon of STOP and SLOWDOWN action type
+   * @brief Processes the polygon of STOP, SLOWDOWN and LIMIT action type
    * @param polygon Polygon to process
    * @param collision_points Array of 2D obstacle points
    * @param velocity Desired robot velocity
    * @param robot_action Output processed robot action
    * @return True if returned action is caused by current polygon, otherwise false
    */
-  bool processStopSlowdown(
+  bool processStopSlowdownLimit(
     const std::shared_ptr<Polygon> polygon,
     const std::vector<Point> & collision_points,
     const Velocity & velocity,
