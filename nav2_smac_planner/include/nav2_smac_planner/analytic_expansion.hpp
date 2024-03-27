@@ -19,6 +19,7 @@
 #include <vector>
 #include <list>
 #include <memory>
+#include <unordered_set>
 
 #include "nav2_smac_planner/node_2d.hpp"
 #include "nav2_smac_planner/node_hybrid.hpp"
@@ -34,6 +35,7 @@ class AnalyticExpansion
 {
 public:
   typedef NodeT * NodePtr;
+  typedef std::unordered_set<NodePtr> NodeSet;
   typedef typename NodeT::Coordinates Coordinates;
   typedef std::function<bool (const unsigned int &, NodeT * &)> NodeGetter;
 
@@ -87,7 +89,8 @@ public:
    */
   NodePtr tryAnalyticExpansion(
     const NodePtr & current_node,
-    const NodePtr & goal_node,
+    const NodeSet & goals_node,
+    const Coordinates & initial_goal_coords,
     const NodeGetter & getter, int & iterations, int & best_cost);
 
   /**

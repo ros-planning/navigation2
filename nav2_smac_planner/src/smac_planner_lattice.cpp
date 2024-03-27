@@ -142,6 +142,20 @@ void SmacPlannerLattice::configure(
     node, name + ".debug_visualizations", rclcpp::ParameterValue(false));
   node->get_parameter(name + ".debug_visualizations", _debug_visualizations);
 
+  std::string goal_heading_type;
+  nav2_util::declare_parameter_if_not_declared(
+    node, name + ".goal_heading_mode", rclcpp::ParameterValue("DEFAULT"));
+  node->get_parameter(name + ".goal_heading_mode", goal_heading_type);
+  GoalHeadingMode goal_heading_mode = fromStringToGH(goal_heading_type);
+  goal_heading_mode = fromStringToGH(goal_heading_type);
+  if (goal_heading_mode == GoalHeadingMode::UNKNOWN) {
+    std::string error_msg = "Unable to get GoalHeader type. Given '" + goal_heading_type + "' "
+      "Valid options are DEFAULT, BIDIRECTIONAL, ALL_DIRECTION. ";
+    throw nav2_core::PlannerException(error_msg);
+  } else {
+    _goal_heading_mode = goal_heading_mode;
+  }
+
   _metadata = LatticeMotionTable::getLatticeMetadata(_search_info.lattice_filepath);
   _search_info.minimum_turning_radius =
     _metadata.min_turning_radius / (_costmap->getResolution());
@@ -199,7 +213,8 @@ void SmacPlannerLattice::configure(
     _terminal_checking_interval,
     _max_planning_time,
     lookup_table_dim,
-    _metadata.number_of_headings);
+    _metadata.number_of_headings,
+    _goal_heading_mode);
 
   // Initialize path smoother
   if (smooth_path) {
@@ -536,6 +551,23 @@ SmacPlannerLattice::dynamicParametersCallback(std::vector<rclcpp::Parameter> par
         _metadata = LatticeMotionTable::getLatticeMetadata(_search_info.lattice_filepath);
         _search_info.minimum_turning_radius =
           _metadata.min_turning_radius / (_costmap->getResolution());
+      } else if (name == _name + ".goal_heading_mode") {
+        std::string goal_heading_type = parameter.as_string();
+        GoalHeadingMode goal_heading_mode = fromStringToGH(goal_heading_type);
+        RCLCPP_INFO(
+          _logger,
+          "GoalHeadingMode type set to '%s'.",
+          goal_heading_type.c_str());
+        if (goal_heading_mode == GoalHeadingMode::UNKNOWN) {
+          RCLCPP_WARN(
+            _logger,
+            "Unable to get GoalHeader type. Given '%s', "
+            "Valid options are DEFAULT, BIDIRECTIONAL, ALL_DIRECTION. ",
+            goal_heading_type.c_str());
+        } else {
+          reinit_a_star = true;
+          _goal_heading_mode = goal_heading_mode;
+        }
       }
     }
   }
@@ -580,7 +612,8 @@ SmacPlannerLattice::dynamicParametersCallback(std::vector<rclcpp::Parameter> par
         _terminal_checking_interval,
         _max_planning_time,
         lookup_table_dim,
-        _metadata.number_of_headings);
+        _metadata.number_of_headings,
+        _goal_heading_mode);
     }
   }
 

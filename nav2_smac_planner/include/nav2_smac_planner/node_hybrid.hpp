@@ -165,12 +165,12 @@ public:
     : x(x_in), y(y_in), theta(theta_in)
     {}
 
-    inline bool operator==(const Coordinates & rhs)
+    inline bool operator==(const Coordinates & rhs) const
     {
       return this->x == rhs.x && this->y == rhs.y && this->theta == rhs.theta;
     }
 
-    inline bool operator!=(const Coordinates & rhs)
+    inline bool operator!=(const Coordinates & rhs) const
     {
       return !(*this == rhs);
     }
@@ -459,6 +459,12 @@ public:
    */
   bool backtracePath(CoordinateVector & path);
 
+  /**
+   * \brief Sets the goal mode for the current search
+   * \param goal_heading_mode The goal heading mode to use
+   */
+  static void setGoalHeadingMode(const GoalHeadingMode & current_goal_heading_mode);
+
   NodeHybrid * parent;
   Coordinates pose;
 
@@ -476,6 +482,7 @@ public:
   // Dubin / Reeds-Shepp lookup and size for dereferencing
   static LookupTable dist_heuristic_lookup_table;
   static float size_lookup;
+  static GoalHeadingMode goal_heading_mode;
 
 private:
   float _cell_cost;

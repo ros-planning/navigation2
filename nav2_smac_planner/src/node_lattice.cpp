@@ -38,6 +38,7 @@ namespace nav2_smac_planner
 LatticeMotionTable NodeLattice::motion_table;
 float NodeLattice::size_lookup = 25;
 LookupTable NodeLattice::dist_heuristic_lookup_table;
+GoalHeadingMode NodeLattice::goal_heading_mode;
 
 // Each of these tables are the projected motion models through
 // time and space applied to the search on the current node in
@@ -332,6 +333,9 @@ float NodeLattice::getHeuristicCost(
   // get obstacle heuristic value
   const float obstacle_heuristic = getObstacleHeuristic(
     node_coords, goal_coords, motion_table.cost_penalty);
+  if (goal_heading_mode == GoalHeadingMode::ALL_DIRECTION) {
+    return obstacle_heuristic;
+  }
   const float distance_heuristic =
     getDistanceHeuristic(node_coords, goal_coords, obstacle_heuristic);
   return std::max(obstacle_heuristic, distance_heuristic);
@@ -426,6 +430,11 @@ void NodeLattice::precomputeDistanceHeuristic(
   const unsigned int & dim_3_size,
   const SearchInfo & search_info)
 {
+  if (goal_heading_mode == GoalHeadingMode::ALL_DIRECTION) {
+    // For all direction goal heading, we only consider the obstacle heuristic
+    // it does not make sense to precompute the distance heuristic to save computation
+    return;
+  }
   // Dubin or Reeds-Shepp shortest distances
   if (!search_info.allow_reverse_expansion) {
     motion_table.state_space = std::make_shared<ompl::base::DubinsStateSpace>(
@@ -449,7 +458,7 @@ void NodeLattice::precomputeDistanceHeuristic(
   int dim_3_size_int = static_cast<int>(dim_3_size);
 
   // Create a lookup table of Dubin/Reeds-Shepp distances in a window around the goal
-  // to help drive the search towards admissible approaches. Deu to symmetries in the
+  // to help drive the search towards admissible approaches. Due to symmetries in the
   // Heuristic space, we need to only store 2 of the 4 quadrants and simply mirror
   // around the X axis any relative node lookup. This reduces memory overhead and increases
   // the size of a window a platform can store in memory.
@@ -461,6 +470,13 @@ void NodeLattice::precomputeDistanceHeuristic(
         from[1] = y;
         from[2] = motion_table.getAngleFromBin(heading);
         motion_heuristic = motion_table.state_space->distance(from(), to());
+        // we need to check for bidirectional goal heading and take the minimum
+        if (goal_heading_mode == GoalHeadingMode::BIDIRECTIONAL) {
+          unsigned int heading_180_offset = (heading + (dim_3_size_int / 2)) % dim_3_size_int;
+          from[2] = motion_table.getAngleFromBin(heading_180_offset);
+          float motion_heuristic_180 = motion_table.state_space->distance(from(), to());
+          motion_heuristic = std::min(motion_heuristic, motion_heuristic_180);
+        }
         dist_heuristic_lookup_table[index] = motion_heuristic;
         index++;
       }
@@ -591,6 +607,11 @@ void NodeLattice::addNodeToPath(
     path.push_back(current_node->pose);
     path.back().theta = NodeLattice::motion_table.getAngleFromBin(path.back().theta);
   }
+}
+
+void NodeLattice::setGoalHeadingMode(const GoalHeadingMode & current_goal_heading_mode)
+{
+  goal_heading_mode = current_goal_heading_mode;
 }
 
 }  // namespace nav2_smac_planner

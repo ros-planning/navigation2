@@ -167,6 +167,19 @@ void SmacPlannerHybrid::configure(
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".motion_model_for_search", rclcpp::ParameterValue(std::string("DUBIN")));
   node->get_parameter(name + ".motion_model_for_search", _motion_model_for_search);
+  std::string goal_heading_type;
+  nav2_util::declare_parameter_if_not_declared(
+    node, name + ".goal_heading_mode", rclcpp::ParameterValue("DEFAULT"));
+  node->get_parameter(name + ".goal_heading_mode", goal_heading_type);
+  GoalHeadingMode goal_heading_mode = fromStringToGH(goal_heading_type);
+  if (goal_heading_mode == GoalHeadingMode::UNKNOWN) {
+    std::string error_msg = "Unable to get GoalHeader type. Given '" + goal_heading_type + "' "
+      "Valid options are DEFAULT, BIDIRECTIONAL, ALL_DIRECTION. ";
+    throw nav2_core::PlannerException(error_msg);
+  } else {
+    _goal_heading_mode = goal_heading_mode;
+  }
+
   _motion_model = fromString(_motion_model_for_search);
   if (_motion_model == MotionModel::UNKNOWN) {
     RCLCPP_WARN(
@@ -234,7 +247,8 @@ void SmacPlannerHybrid::configure(
     _terminal_checking_interval,
     _max_planning_time,
     _lookup_table_dim,
-    _angle_quantizations);
+    _angle_quantizations,
+    _goal_heading_mode);
 
   // Initialize path smoother
   if (smooth_path) {
@@ -628,6 +642,23 @@ SmacPlannerHybrid::dynamicParametersCallback(std::vector<rclcpp::Parameter> para
             "valid options are MOORE, VON_NEUMANN, DUBIN, REEDS_SHEPP.",
             _motion_model_for_search.c_str());
         }
+      } else if (name == _name + ".goal_heading_mode") {
+        std::string goal_heading_type = parameter.as_string();
+        GoalHeadingMode goal_heading_mode = fromStringToGH(goal_heading_type);
+        RCLCPP_INFO(
+          _logger,
+          "GoalHeadingMode type set to '%s'.",
+          goal_heading_type.c_str());
+        if (goal_heading_mode == GoalHeadingMode::UNKNOWN) {
+          RCLCPP_WARN(
+            _logger,
+            "Unable to get GoalHeader type. Given '%s', "
+            "Valid options are DEFAULT, BIDIRECTIONAL, ALL_DIRECTION. ",
+            goal_heading_type.c_str());
+        } else {
+          reinit_a_star = true;
+          _goal_heading_mode = goal_heading_mode;
+        }
       }
     }
   }
@@ -668,7 +699,8 @@ SmacPlannerHybrid::dynamicParametersCallback(std::vector<rclcpp::Parameter> para
         _terminal_checking_interval,
         _max_planning_time,
         _lookup_table_dim,
-        _angle_quantizations);
+        _angle_quantizations,
+        _goal_heading_mode);
     }
 
     // Re-Initialize costmap downsampler

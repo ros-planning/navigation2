@@ -46,6 +46,7 @@ std::shared_ptr<nav2_costmap_2d::InflationLayer> NodeHybrid::inflation_layer = n
 
 CostmapDownsampler NodeHybrid::downsampler;
 ObstacleHeuristicQueue NodeHybrid::obstacle_heuristic_queue;
+GoalHeadingMode NodeHybrid::goal_heading_mode;
 
 // Each of these tables are the projected motion models through
 // time and space applied to the search on the current node in
@@ -440,6 +441,9 @@ float NodeHybrid::getHeuristicCost(
 {
   const float obstacle_heuristic =
     getObstacleHeuristic(node_coords, goal_coords, motion_table.cost_penalty);
+  if (goal_heading_mode == GoalHeadingMode::ALL_DIRECTION) {
+    return obstacle_heuristic;
+  }
   const float dist_heuristic = getDistanceHeuristic(node_coords, goal_coords, obstacle_heuristic);
   return std::max(obstacle_heuristic, dist_heuristic);
 }
@@ -780,6 +784,11 @@ void NodeHybrid::precomputeDistanceHeuristic(
   const unsigned int & dim_3_size,
   const SearchInfo & search_info)
 {
+  if (goal_heading_mode == GoalHeadingMode::ALL_DIRECTION) {
+    // For all direction goal heading, we only consider the obstacle heuristic
+    // it does not make sense to precompute the distance heuristic to save computation
+    return;
+  }
   // Dubin or Reeds-Shepp shortest distances
   if (motion_model == MotionModel::DUBIN) {
     motion_table.state_space = std::make_shared<ompl::base::DubinsStateSpace>(
@@ -816,6 +825,13 @@ void NodeHybrid::precomputeDistanceHeuristic(
         from[1] = y;
         from[2] = heading * angular_bin_size;
         motion_heuristic = motion_table.state_space->distance(from(), to());
+        // we need to check for bidirectional goal heading and take the minimum
+        if (goal_heading_mode == GoalHeadingMode::BIDIRECTIONAL) {
+          unsigned int heading_180_offset = (heading + (dim_3_size_int / 2)) % dim_3_size_int;
+          from[2] = heading_180_offset * angular_bin_size;
+          float motion_heuristic_180 = motion_table.state_space->distance(from(), to());
+          motion_heuristic = std::min(motion_heuristic, motion_heuristic_180);
+        }
         dist_heuristic_lookup_table[index] = motion_heuristic;
         index++;
       }
@@ -883,4 +899,8 @@ bool NodeHybrid::backtracePath(CoordinateVector & path)
   return true;
 }
 
+void NodeHybrid::setGoalHeadingMode(const GoalHeadingMode & current_goal_heading_mode)
+{
+  goal_heading_mode = current_goal_heading_mode;
+}
 }  // namespace nav2_smac_planner

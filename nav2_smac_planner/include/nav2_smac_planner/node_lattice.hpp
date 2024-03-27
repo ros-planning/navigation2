@@ -415,12 +415,19 @@ public:
    */
   void addNodeToPath(NodePtr current_node, CoordinateVector & path);
 
+  /**
+   * \brief Sets the goal mode for the current search
+   * \param goal_heading_mode The goal heading mode to use
+   */
+  static void setGoalHeadingMode(const GoalHeadingMode & current_goal_heading_mode);
+
   NodeLattice * parent;
   Coordinates pose;
   static LatticeMotionTable motion_table;
   // Dubin / Reeds-Shepp lookup and size for dereferencing
   static LookupTable dist_heuristic_lookup_table;
   static float size_lookup;
+  static GoalHeadingMode goal_heading_mode;
 
 private:
   float _cell_cost;
