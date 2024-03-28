@@ -10,11 +10,13 @@ set(TEST_NAMES
   path_handler_test
   critic_manager_test
   optimizer_unit_tests
+  velocity_test
 )
 
 foreach(name IN LISTS TEST_NAMES)
   ament_add_gtest(${name}
     ${name}.cpp
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 
   ament_target_dependencies(${name}

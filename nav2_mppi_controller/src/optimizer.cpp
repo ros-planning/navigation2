@@ -118,17 +118,16 @@ void Optimizer::reset()
 {
   state_.reset(settings_.batch_size, settings_.time_steps);
   control_sequence_.reset(settings_.time_steps);
-  control_history_[0] = {0.0f, 0.0f, 0.0f};
-  control_history_[1] = {0.0f, 0.0f, 0.0f};
-  control_history_[2] = {0.0f, 0.0f, 0.0f};
-  control_history_[3] = {0.0f, 0.0f, 0.0f};
-
+  for (auto & ch : control_history_) {
+    ch.reset();
+  }
   settings_.constraints = settings_.base_constraints;
 
-  costs_ = xt::zeros<float>({settings_.batch_size});
+  xt::noalias(costs_) = xt::zeros<float>({settings_.batch_size});
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
 
   noise_generator_.reset(settings_, isHolonomic());
+  critic_manager_.reInitializeCritics();
   RCLCPP_INFO(logger_, "Optimizer reset");
 }
 
@@ -195,6 +194,9 @@ void Optimizer::prepare(
   state_.speed = robot_speed;
   path_ = utils::toTensor(plan);
   costs_.fill(0.0f);
+
+  // FIXME: Should we be resetting generated_trajectories_ here???
+  // generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
 
   critics_data_.fail_flag = false;
   critics_data_.goal_checker = goal_checker;
@@ -353,21 +355,20 @@ void Optimizer::updateControlSequence()
 {
   const bool is_holo = isHolonomic();
   auto & s = settings_;
-  auto bounded_noises_vx = state_.cvx - control_sequence_.vx;
-  auto bounded_noises_wz = state_.cwz - control_sequence_.wz;
   xt::noalias(costs_) +=
-    s.gamma / powf(s.sampling_std.vx, 2) * xt::sum(
-    xt::view(control_sequence_.vx, xt::newaxis(), xt::all()) * bounded_noises_vx, 1, immediate);
+    s.gamma / powf(s.sampling_std.vx, 2) *
+    xt::sum(xt::view(control_sequence_.vx, xt::newaxis(), xt::all()) *
+    (state_.cvx - control_sequence_.vx), 1, immediate);
   xt::noalias(costs_) +=
-    s.gamma / powf(s.sampling_std.wz, 2) * xt::sum(
-    xt::view(control_sequence_.wz, xt::newaxis(), xt::all()) * bounded_noises_wz, 1, immediate);
+    s.gamma / powf(s.sampling_std.wz, 2) *
+    xt::sum(xt::view(control_sequence_.wz, xt::newaxis(), xt::all()) *
+    (state_.cwz - control_sequence_.wz), 1, immediate);
 
   if (is_holo) {
-    auto bounded_noises_vy = state_.cvy - control_sequence_.vy;
     xt::noalias(costs_) +=
       s.gamma / powf(s.sampling_std.vy, 2) * xt::sum(
-      xt::view(control_sequence_.vy, xt::newaxis(), xt::all()) * bounded_noises_vy,
-      1, immediate);
+      xt::view(control_sequence_.vy, xt::newaxis(), xt::all()) *
+      (state_.cvy - control_sequence_.vy), 1, immediate);
   }
 
   auto && costs_normalized = costs_ - xt::amin(costs_, immediate);

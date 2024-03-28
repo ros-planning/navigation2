@@ -18,14 +18,27 @@
 #include <string>
 #include <rclcpp/rclcpp.hpp>
 
+struct TestControllerSettings
+{
+  double controller_frequency;
+  bool visualize;
+};
+
 struct TestOptimizerSettings
 {
   int batch_size;
   int time_steps;
   int iteration_count;
-  double lookahead_distance;
   std::string motion_model;
   bool consider_footprint;
+  double model_dt = 0.05;
+  double vx_max = 0.5;
+  double vx_min = -0.35;
+  double vy_max = 0.5;
+  double wz_max = 1.9;
+  double vx_std = 0.2;
+  double vy_std = 0.2;
+  double wz_std = 0.4;
 };
 
 struct TestPose
@@ -36,13 +49,13 @@ struct TestPose
 
 struct TestCostmapSettings
 {
-  const unsigned int cells_x = 40;
-  const unsigned int cells_y = 40;
-  const double origin_x = 0.0;
-  const double origin_y = 0.0;
-  const double resolution = 0.1;
-  const unsigned char cost_map_default_value = 0;
-  const double footprint_size = 0.15;
+  unsigned int cells_x = 40;
+  unsigned int cells_y = 40;
+  double origin_x = 0.0;
+  double origin_y = 0.0;
+  double resolution = 0.1;
+  unsigned char cost_map_default_value = 0;
+  double footprint_size = 0.15;
 
   std::pair<unsigned int, unsigned int> getCenterIJ()
   {
@@ -58,6 +71,7 @@ struct TestCostmapSettings
       static_cast<double>(cells_y) * resolution / 2.0};
   }
 };
+
 struct TestObstaclesSettings
 {
   unsigned int center_cells_x;
