@@ -167,6 +167,19 @@ void SmacPlannerHybrid::configure(
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".motion_model_for_search", rclcpp::ParameterValue(std::string("DUBIN")));
   node->get_parameter(name + ".motion_model_for_search", _motion_model_for_search);
+  std::string goal_heading_type;
+  nav2_util::declare_parameter_if_not_declared(
+    node, name + ".goal_heading_mode", rclcpp::ParameterValue("DEFAULT"));
+  node->get_parameter(name + ".goal_heading_mode", goal_heading_type);
+  GoalHeadingMode goal_heading_mode = fromStringToGH(goal_heading_type);
+  if (goal_heading_mode == GoalHeadingMode::UNKNOWN) {
+    std::string error_msg = "Unable to get GoalHeader type. Given '" + goal_heading_type + "' "
+      "Valid options are DEFAULT, BIDIRECTIONAL, ALL_DIRECTION. ";
+    throw nav2_core::PlannerException(error_msg);
+  } else {
+    _goal_heading_mode = goal_heading_mode;
+  }
+
   _motion_model = fromString(_motion_model_for_search);
   if (_motion_model == MotionModel::UNKNOWN) {
     RCLCPP_WARN(
@@ -389,7 +402,7 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
     orientation_bin -= static_cast<float>(_angle_quantizations);
   }
   orientation_bin_id = static_cast<unsigned int>(floor(orientation_bin));
-  _a_star->setGoal(mx, my, orientation_bin_id);
+  _a_star->setGoal(mx, my, orientation_bin_id, _goal_heading_mode);
 
   // Setup message
   nav_msgs::msg::Path plan;
@@ -646,6 +659,22 @@ SmacPlannerHybrid::dynamicParametersCallback(std::vector<rclcpp::Parameter> para
             "Unable to get MotionModel search type. Given '%s', "
             "valid options are MOORE, VON_NEUMANN, DUBIN, REEDS_SHEPP.",
             _motion_model_for_search.c_str());
+        }
+      } else if (name == _name + ".goal_heading_mode") {
+        std::string goal_heading_type = parameter.as_string();
+        GoalHeadingMode goal_heading_mode = fromStringToGH(goal_heading_type);
+        RCLCPP_INFO(
+          _logger,
+          "GoalHeadingMode type set to '%s'.",
+          goal_heading_type.c_str());
+        if (goal_heading_mode == GoalHeadingMode::UNKNOWN) {
+          RCLCPP_WARN(
+            _logger,
+            "Unable to get GoalHeader type. Given '%s', "
+            "Valid options are DEFAULT, BIDIRECTIONAL, ALL_DIRECTION. ",
+            goal_heading_type.c_str());
+        } else {
+          _goal_heading_mode = goal_heading_mode;
         }
       }
     }
