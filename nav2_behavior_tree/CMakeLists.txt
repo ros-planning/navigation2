@@ -20,8 +20,6 @@ find_package(tf2_ros REQUIRED)
 
 nav2_package()
 
-add_compile_options(-Wno-shadow) # Delete after https://github.com/BehaviorTree/BehaviorTree.CPP/issues/811 is released
-
 set(library_name ${PROJECT_NAME})
 
 add_library(${library_name} SHARED
