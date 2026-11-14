@@ -116,26 +116,7 @@ public:
     virtual ~MapGridQueue() = default;
     bool validCellToQueue(const costmap_queue::CellData & cell) override;
 
-    /**
-     * @brief Enqueue the unseen 4-connected neighbors of a cell, one step further from its source
-     * @param cell The cell being expanded
-     *
-     * getNextCell orders cells by their straight line distance to the source, which is not
-     * the distance walked around obstacles.
-     */
-    void enqueueNeighbors(const costmap_queue::CellData & cell);
-
 protected:
-    /**
-     * @brief Enqueue a neighbor of a cell one step further from its source, if not seen yet
-     * @param from The cell being expanded
-     * @param index The costmap index of the neighbor
-     * @param x The x coordinate of the neighbor
-     * @param y The y coordinate of the neighbor
-     */
-    void enqueueNeighbor(
-      const costmap_queue::CellData & from, unsigned int index, unsigned int x, unsigned int y);
-
     MapGridCritic & parent_;
   };
 

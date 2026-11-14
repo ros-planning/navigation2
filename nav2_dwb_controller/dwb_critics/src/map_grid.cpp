@@ -54,34 +54,6 @@ bool MapGridCritic::MapGridQueue::validCellToQueue(const costmap_queue::CellData
   return true;
 }
 
-void MapGridCritic::MapGridQueue::enqueueNeighbors(const CellData & cell)
-{
-  const unsigned int size_x = costmap_.getSizeInCellsX();
-  if (cell.x_ > 0) {
-    enqueueNeighbor(cell, cell.index_ - 1, cell.x_ - 1, cell.y_);
-  }
-  if (cell.y_ > 0) {
-    enqueueNeighbor(cell, cell.index_ - size_x, cell.x_, cell.y_ - 1);
-  }
-  if (cell.x_ < size_x - 1) {
-    enqueueNeighbor(cell, cell.index_ + 1, cell.x_ + 1, cell.y_);
-  }
-  if (cell.y_ < costmap_.getSizeInCellsY() - 1) {
-    enqueueNeighbor(cell, cell.index_ + size_x, cell.x_, cell.y_ + 1);
-  }
-}
-
-void MapGridCritic::MapGridQueue::enqueueNeighbor(
-  const CellData & from, unsigned int index, unsigned int x, unsigned int y)
-{
-  if (seen_[index]) {
-    return;
-  }
-  seen_[index] = true;
-  const double distance = from.distance_ + 1.0;
-  enqueue(distance, CellData(distance, index, x, y, from.src_x_, from.src_y_));
-}
-
 void MapGridCritic::onInit()
 {
   costmap_ = costmap_ros_->getCostmap();
@@ -144,9 +116,9 @@ std::vector<CellData> MapGridCritic::propagateObstacleAwareManhattanDistances()
 {
   // Seeds are the only cells at distance 0, so the search sees them all first
   std::vector<CellData> seeds;
+  queue_->setObstacleAware(true);
   while (!queue_->isEmpty()) {
-    const CellData cell = queue_->front();
-    queue_->pop();
+    const CellData cell = queue_->getNextCell();
     if (cell.distance_ == 0.0) {
       seeds.push_back(cell);
     }
@@ -155,9 +127,9 @@ std::vector<CellData> MapGridCritic::propagateObstacleAwareManhattanDistances()
       setAsObstacle(cell.index_);
     } else {
       cell_values_[cell.index_] = cell.distance_;
-      queue_->enqueueNeighbors(cell);
     }
   }
+  queue_->setObstacleAware(false);
   return seeds;
 }
 
